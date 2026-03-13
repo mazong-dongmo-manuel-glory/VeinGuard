@@ -8,12 +8,16 @@ import Login from '../ecrans/Login';
 import Dashboard from '../ecrans/Dashboard';
 import AccessHistory from '../ecrans/AccessHistory';
 import AccessDecision from '../ecrans/AccessDecision';
+import AccessEvent from '../ecrans/AccessEvent';
 import SystemSetting from '../ecrans/SystemSetting';
 import UserManagement from '../ecrans/UserManagement';
 import VeinScanBiometrics from '../ecrans/VeinScanBiometrics';
+import EnrollUser from '../ecrans/EnrollUser';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
+const HistoryStack = createStackNavigator();
+const UserStack = createStackNavigator();
 
 const COLORS = {
   bg: '#080e1a',
@@ -77,6 +81,24 @@ const tabStyles = StyleSheet.create({
 });
 
 // ─── Onglets principaux (4 items + 1 FAB central) ─────────────────────────
+function HistoryStackScreen() {
+  return (
+    <HistoryStack.Navigator screenOptions={{ headerShown: false }}>
+      <HistoryStack.Screen name="AccessHistoryList" component={AccessHistory} />
+      <HistoryStack.Screen name="AccessEvent" component={AccessEvent} />
+    </HistoryStack.Navigator>
+  );
+}
+
+function UserStackScreen() {
+  return (
+    <UserStack.Navigator screenOptions={{ headerShown: false }}>
+      <UserStack.Screen name="UserManagementList" component={UserManagement} />
+      <UserStack.Screen name="EnrollUser" component={EnrollUser} />
+    </UserStack.Navigator>
+  );
+}
+
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -115,7 +137,7 @@ function MainTabs() {
       {/* ② History */}
       <Tab.Screen
         name="AccessHistory"
-        component={AccessHistory}
+        component={HistoryStackScreen}
         options={{
           tabBarLabel: 'HISTORIQUE',
           tabBarIcon: ({ focused }) => (
@@ -138,7 +160,7 @@ function MainTabs() {
       {/* ④ Users */}
       <Tab.Screen
         name="UserManagement"
-        component={UserManagement}
+        component={UserStackScreen}
         options={{
           tabBarLabel: 'UTILISATEURS',
           tabBarIcon: ({ focused }) => (

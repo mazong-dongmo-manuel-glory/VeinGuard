@@ -48,10 +48,10 @@ function StatusBadge({ status }) {
   );
 }
 
-function EventRow({ item }) {
+function EventRow({ item, onPress }) {
   const scoreColor = item.status === 'GRANTED' ? COLORS.green : item.status === 'DENIED' ? COLORS.red : COLORS.amber;
   return (
-    <View style={styles.eventRow}>
+    <TouchableOpacity style={styles.eventRow} onPress={onPress} activeOpacity={0.85}>
       <View style={[styles.eventDot, { backgroundColor: item.dot }]} />
       <View style={styles.eventAvatar}>
         <Text style={styles.eventAvatarText}>👤</Text>
@@ -66,11 +66,11 @@ function EventRow({ item }) {
         <Text style={styles.eventTime}>{item.time}</Text>
         <Text style={styles.eventId}>{item.id}</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
-export default function AccessHistory() {
+export default function AccessHistory({ navigation }) {
   const [search, setSearch] = useState('');
   return (
     <View style={styles.screen}>
@@ -181,7 +181,11 @@ export default function AccessHistory() {
         <View style={styles.card}>
           <Text style={styles.filterTitle}>EVENT LOG</Text>
           {events.map((item) => (
-            <EventRow key={item.id} item={item} />
+            <EventRow
+              key={item.id}
+              item={item}
+              onPress={() => navigation?.navigate('AccessEvent', { event: item })}
+            />
           ))}
         </View>
         <View style={{ height: 24 }} />

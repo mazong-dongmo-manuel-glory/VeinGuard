@@ -142,7 +142,7 @@ function UserCard({ user }) {
   );
 }
 
-export default function UserManagement() {
+export default function UserManagement({ navigation }) {
   const [search, setSearch] = useState('');
 
   return (
@@ -176,7 +176,11 @@ export default function UserManagement() {
             <Text style={styles.pageTitle}>USER MANAGEMENT</Text>
             <Text style={styles.pageSubtitle}>Manage user roles, permissions, and biometric data</Text>
           </View>
-          <TouchableOpacity style={styles.enrollBtn}>
+          <TouchableOpacity
+            style={styles.enrollBtn}
+            onPress={() => navigation?.navigate('EnrollUser')}
+            activeOpacity={0.85}
+          >
             <Text style={styles.enrollBtnText}>+ ADD / ENROLL USER</Text>
           </TouchableOpacity>
         </View>
