@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -71,6 +72,7 @@ function EventRow({ item, onPress }) {
 }
 
 export default function AccessHistory({ navigation }) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   return (
     <View style={styles.screen}>

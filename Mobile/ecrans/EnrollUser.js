@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -46,6 +47,7 @@ function InfoStat({ title, value }) {
 }
 
 export default function EnrollUser({ navigation }) {
+  const { t } = useTranslation();
   const [fullName, setFullName] = useState('John Doe');
   const [employeeId, setEmployeeId] = useState('EMP-001');
   const [email, setEmail] = useState('john.doe@corp.com');

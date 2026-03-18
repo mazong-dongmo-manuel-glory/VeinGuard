@@ -9,6 +9,7 @@ import {
   StatusBar,
   Dimensions,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
@@ -57,7 +58,7 @@ const DropdownBar = () => (
   </View>
 );
 
-const AccessGrantedBadge = () => (
+const AccessGrantedBadge = ({ t }) => (
   <View style={styles.badgeContainer}>
     {/* Glowing circle with checkmark */}
     <View style={styles.checkCircleOuter}>
@@ -65,12 +66,12 @@ const AccessGrantedBadge = () => (
         <Text style={styles.checkMark}>✓</Text>
       </View>
     </View>
-    <Text style={styles.accessGrantedText}>ACCESS GRANTED</Text>
-    <Text style={styles.accessSubText}>Biometric authentication successful</Text>
+    <Text style={styles.accessGrantedText}>{t('accessDecision.title')}</Text>
+    <Text style={styles.accessSubText}>{t('login.subtitle')}</Text>
   </View>
 );
 
-const UserCard = () => (
+const UserCard = ({ t }) => (
   <View style={styles.card}>
     {/* User info header */}
     <View style={styles.userRow}>
@@ -79,18 +80,18 @@ const UserCard = () => (
       </View>
       <View style={styles.userInfo}>
         <Text style={styles.userName}>John Mitchell</Text>
-        <Text style={styles.userRole}>Senior Engineer</Text>
+        <Text style={styles.userRole}>{t('accessDecision.userInfo')}</Text>
       </View>
     </View>
     {/* Divider */}
     <View style={styles.divider} />
     {/* Details */}
     <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>User ID</Text>
+      <Text style={styles.detailLabel}>{t('accessDecision.userId')}</Text>
       <Text style={styles.detailValue}>USR-2847</Text>
     </View>
     <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>Department</Text>
+      <Text style={styles.detailLabel}>{t('common.admin')}</Text>
       <Text style={styles.detailValue}>Engineering</Text>
     </View>
     <View style={styles.detailRow}>
@@ -196,6 +197,7 @@ const DoorStatus = () => {
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function AccessDecision() {
+  const { t } = useTranslation();
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
@@ -206,8 +208,8 @@ export default function AccessDecision() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <AccessGrantedBadge />
-        <UserCard />
+        <AccessGrantedBadge t={t} />
+        <UserCard t={t} />
         <ConfidenceScore />
         <DeviceInfo />
         <ActionButtons />

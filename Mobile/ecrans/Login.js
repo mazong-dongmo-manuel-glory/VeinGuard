@@ -11,6 +11,7 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 const COLORS = {
   bg: '#080e1a',
@@ -30,6 +31,7 @@ const COLORS = {
 };
 
 export default function Login({ navigation }) {
+  const { t } = useTranslation();
   const { width, height } = useWindowDimensions();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -115,9 +117,9 @@ export default function Login({ navigation }) {
           {/* USERNAME */}
           <View style={styles.fieldGroup}>
             <Text style={[styles.fieldLabel, { fontSize: fieldLabelSize }]}>
-              <Text style={styles.fieldIcon}>👤 </Text>
-              USERNAME / EMAIL
-            </Text>
+                            <Text style={styles.fieldIcon}>👤 </Text>
+                            {t('systemSettings.username')}
+                          </Text>
             <TextInput
               style={[styles.input, { paddingVertical: inputVertical, fontSize: inputSize }]}
               placeholder="Enter username or email"
@@ -133,12 +135,12 @@ export default function Login({ navigation }) {
           <View style={styles.fieldGroup}>
             <Text style={[styles.fieldLabel, { fontSize: fieldLabelSize }]}>
               <Text style={styles.fieldIcon}>🔒 </Text>
-              PASSWORD
+              {t('systemSettings.password')}
             </Text>
             <View style={styles.passwordRow}>
               <TextInput
                 style={[styles.input, styles.passwordInput, { paddingVertical: inputVertical, fontSize: inputSize }]}
-                placeholder="Enter secure password"
+                placeholder={t('systemSettings.enterPassword')}
                 placeholderTextColor={COLORS.textDim}
                 value={password}
                 onChangeText={setPassword}

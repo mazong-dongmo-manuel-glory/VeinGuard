@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -77,6 +78,7 @@ function CodeBlock({ title, topic, payload }) {
 }
 
 export default function AccessEvent({ navigation, route }) {
+  const { t } = useTranslation();
   const event = route?.params?.event;
   const eventId = event?.id || 'EVT-8743';
   const eventName = event?.name || 'John Mitchell';

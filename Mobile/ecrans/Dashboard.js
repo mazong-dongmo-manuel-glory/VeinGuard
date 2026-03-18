@@ -8,6 +8,7 @@ import {
   StatusBar,
   Animated,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 const COLORS = {
   bg: '#080e1a',
@@ -127,6 +128,7 @@ function DeviceCard({ device }) {
 }
 
 export default function Dashboard({ navigation }) {
+  const { t } = useTranslation();
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {

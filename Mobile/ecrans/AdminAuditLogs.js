@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, StatusBar,
@@ -85,6 +86,7 @@ function LogItem({ item }) {
 }
 
 export default function AdminAuditLogs() {
+  const { t } = useTranslation();
   const [filter, setFilter] = useState('All Events');
 
   const filters = ['All Events', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -44,6 +45,7 @@ function QualityBar({ label, value, color }) {
 }
 
 export default function VeinScanBiometrics() {
+  const { t } = useTranslation();
   const [userId, setUserId] = useState('');
   const [scanning, setScanning] = useState(false);
 

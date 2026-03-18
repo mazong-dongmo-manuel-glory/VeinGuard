@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
@@ -143,6 +144,7 @@ function UserCard({ user }) {
 }
 
 export default function UserManagement({ navigation }) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
 
   return (

@@ -9,6 +9,8 @@ import {
   Switch,
   StatusBar,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { useLangueStore } from '../store/langueStore';
 
 const COLORS = {
   bg: '#080e1a',
@@ -93,6 +95,9 @@ function DeviceCard({ name, status, firmware, uptime, signal, lastSeen }) {
 }
 
 export default function SystemSetting() {
+  const { t } = useTranslation();
+  const langue = useLangueStore((state) => state.langue);
+  const modifierLangue = useLangueStore((state) => state.modifierLangue);
   const [broker, setBroker] = useState('mqtt.veinguard.local');
   const [port, setPort] = useState('8883');
   const [clientId, setClientId] = useState('veinguard-app-001');
@@ -119,12 +124,12 @@ export default function SystemSetting() {
           </View>
         </View>
         <View style={styles.headerRight}>
-          <Text style={styles.headerAdmin}>Admin</Text>
+          <Text style={styles.headerAdmin}>{t('common.admin')}</Text>
           <View style={styles.avatarCircle}><Text>👤</Text></View>
         </View>
       </View>
       <View style={styles.dropdown}>
-        <Text style={styles.dropdownText}>System Settings (MQTT/VPN Config)</Text>
+        <Text style={styles.dropdownText}>{t('systemSettings.title')} (MQTT/VPN Config)</Text>
         <Text style={styles.dropdownArrow}>▼</Text>
       </View>
 
@@ -132,56 +137,56 @@ export default function SystemSetting() {
         {/* Page title */}
         <View style={styles.pageTitleRow}>
           <Text style={styles.settingsIcon}>⚙</Text>
-          <Text style={styles.pageTitle}>SYSTEM SETTINGS</Text>
+          <Text style={styles.pageTitle}>{t('systemSettings.title')}</Text>
         </View>
-        <Text style={styles.pageSubtitle}>MQTT broker configuration, device management, and security settings</Text>
+        <Text style={styles.pageSubtitle}>{t('systemSettings.subtitle')}</Text>
 
         {/* MQTT BROKER CONFIG */}
         <View style={styles.card}>
-          <SectionHeader icon="📡" title="MQTT BROKER CONFIG" color={COLORS.teal} />
-          <TouchableOpacity style={styles.testConnBtn}><Text style={styles.testConnText}>TEST CONNECTION</Text></TouchableOpacity>
+          <SectionHeader icon="📡" title={t('systemSettings.mqttBrokerConfig')} color={COLORS.teal} />
+          <TouchableOpacity style={styles.testConnBtn}><Text style={styles.testConnText}>{t('systemSettings.testConnection')}</Text></TouchableOpacity>
           <View style={styles.halfRow}>
-            <InputField label="BROKER HOST" value={broker} onChangeText={setBroker} placeholder="mqtt host" />
-            <InputField label="PORT" value={port} onChangeText={setPort} placeholder="8883" />
+            <InputField label={t('systemSettings.brokerHost')} value={broker} onChangeText={setBroker} placeholder="mqtt host" />
+            <InputField label={t('systemSettings.port')} value={port} onChangeText={setPort} placeholder="8883" />
           </View>
           <View style={styles.halfRow}>
-            <InputField label="CLIENT ID" value={clientId} onChangeText={setClientId} />
-            <InputField label="PROTOCOL" value="MQTT v5.0" onChangeText={() => {}} />
+            <InputField label={t('systemSettings.clientId')} value={clientId} onChangeText={setClientId} />
+            <InputField label={t('systemSettings.protocol')} value="MQTT v5.0" onChangeText={() => {}} />
           </View>
           <View style={styles.halfRow}>
-            <InputField label="USERNAME" value={username} onChangeText={setUsername} />
-            <InputField label="PASSWORD" value={password} onChangeText={setPassword} secure />
+            <InputField label={t('systemSettings.username')} value={username} onChangeText={setUsername} />
+            <InputField label={t('systemSettings.password')} value={password} onChangeText={setPassword} secure />
           </View>
           <View style={styles.checkRow}>
             <TouchableOpacity style={styles.checkbox} onPress={() => setTls(!tls)}>
               <View style={[styles.checkBox, tls && styles.checkBoxActive]}>{tls && <Text style={styles.checkMark}>✓</Text>}</View>
-              <Text style={styles.checkLabel}>Enable TLS/SSL</Text>
+              <Text style={styles.checkLabel}>{t('systemSettings.enableTLS')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.checkbox} onPress={() => setCleanSession(!cleanSession)}>
               <View style={[styles.checkBox, cleanSession && styles.checkBoxActive]}>{cleanSession && <Text style={styles.checkMark}>✓</Text>}</View>
-              <Text style={styles.checkLabel}>Clean Session</Text>
+              <Text style={styles.checkLabel}>{t('systemSettings.cleanSession')}</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.halfRow}>
-            <InputField label="KEEP ALIVE (S)" value="60" onChangeText={() => {}} />
-            <InputField label="RECONNECT DELAY (S)" value="5" onChangeText={() => {}} />
-            <InputField label="MAX RECONNECT (S)" value="30" onChangeText={() => {}} />
+            <InputField label={t('systemSettings.keepAlive')} value="60" onChangeText={() => {}} />
+            <InputField label={t('systemSettings.reconnectDelay')} value="5" onChangeText={() => {}} />
+            <InputField label={t('systemSettings.maxReconnect')} value="30" onChangeText={() => {}} />
           </View>
         </View>
 
         {/* TOPIC MAPPING & QoS */}
         <View style={styles.card}>
-          <SectionHeader icon="🟣" title="TOPIC MAPPING & QoS" color="#c000ff" />
-          <QoSRow topic="veinguard/devices/+/status" description="Receive device status updates" qos="QoS 1" />
-          <QoSRow topic="veinguard/scan/request" description="Biometric scan requests" qos="QoS 1" />
-          <QoSRow topic="veinguard/scan/result" description="Scan result messages" qos="QoS 2" />
-          <QoSRow topic="veinguard/enroll/+" description="User enrollment events" qos="QoS 2" />
-          <QoSRow topic="veinguard/telemetry/+" description="Device telemetry and diagnostics" qos="QoS 0" />
+          <SectionHeader icon="🟣" title={t('systemSettings.topicMapping')} color="#c000ff" />
+          <QoSRow topic="veinguard/devices/+/status" description={t('systemSettings.topicStatus')} qos="QoS 1" />
+          <QoSRow topic="veinguard/scan/request" description={t('systemSettings.topicScan')} qos="QoS 1" />
+          <QoSRow topic="veinguard/scan/result" description={t('systemSettings.topicResult')} qos="QoS 2" />
+          <QoSRow topic="veinguard/enroll/+" description={t('systemSettings.topicEnroll')} qos="QoS 2" />
+          <QoSRow topic="veinguard/telemetry/+" description={t('systemSettings.topicTelemetry')} qos="QoS 0" />
         </View>
 
         {/* ESP32 DEVICE MANAGEMENT */}
         <View style={styles.card}>
-          <SectionHeader icon="🔴" title="ESP32 DEVICE MANAGEMENT" color={COLORS.amber} />
+          <SectionHeader icon="🔴" title={t('systemSettings.esp32Management')} color={COLORS.amber} />
           <DeviceCard name="ESP32-MAIN-C1" status="Online" firmware="v3.1" uptime="48:21m" signal="-67dBm" lastSeen="5s ago" />
           <DeviceCard name="ESP32-LAB-C2" status="Online" firmware="v3.1" uptime="12h 11m" signal="-72dBm" lastSeen="3s ago" />
           <DeviceCard name="ESP32-SRV-C3" status="Warning" firmware="v2.8" uptime="120h 48m" signal="-83dBm" lastSeen="5s ago" />
@@ -190,49 +195,82 @@ export default function SystemSetting() {
 
         {/* APP SECURITY */}
         <View style={styles.card}>
-          <SectionHeader icon="🔴" title="APP SECURITY" color={COLORS.red} />
+          <SectionHeader icon="🔴" title={t('systemSettings.appSecurity')} color={COLORS.red} />
           <View style={styles.secRow}>
             <View>
-              <Text style={styles.secLabel}>Biometric Login</Text>
-              <Text style={styles.secDesc}>Use fingerprint or face to unlock app</Text>
+              <Text style={styles.secLabel}>{t('systemSettings.biometricLogin')}</Text>
+              <Text style={styles.secDesc}>{t('systemSettings.biometricDesc')}</Text>
             </View>
             <Switch value={biometric} onValueChange={setBiometric} trackColor={{ true: COLORS.green }} thumbColor={COLORS.white} />
           </View>
           <View style={styles.secRow}>
             <View>
-              <Text style={styles.secLabel}>Auto Lock</Text>
-              <Text style={styles.secDesc}>Lock on</Text>
+              <Text style={styles.secLabel}>{t('systemSettings.autoLock')}</Text>
+              <Text style={styles.secDesc}>{t('systemSettings.autoLockDesc')}</Text>
             </View>
             <Switch value={autoLock} onValueChange={setAutoLock} trackColor={{ true: COLORS.green }} thumbColor={COLORS.white} />
           </View>
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>SESSION TIMEOUT (MIN)</Text>
+            <Text style={styles.inputLabel}>{t('systemSettings.sessionTimeout')}</Text>
             <TextInput style={styles.textInput} value={sessionTimeout} onChangeText={setSessionTimeout} keyboardType="numeric" />
           </View>
           <View style={styles.secRow}>
             <View>
-              <Text style={styles.secLabel}>PIN Required</Text>
-              <Text style={styles.secDesc}>Require PIN for critical actions</Text>
+              <Text style={styles.secLabel}>{t('systemSettings.pinRequired')}</Text>
+              <Text style={styles.secDesc}>{t('systemSettings.pinDesc')}</Text>
             </View>
             <Switch value={pin} onValueChange={setPin} trackColor={{ true: COLORS.green }} thumbColor={COLORS.white} />
           </View>
         </View>
 
+        {/* LANGUAGE SELECTION */}
+        <View style={styles.card}>
+          <SectionHeader icon="🌐" title={t('systemSettings.language')} color={COLORS.amber} />
+          <Text style={styles.inputLabel}>{t('systemSettings.selectLanguage')}</Text>
+          <View style={styles.languageRow}>
+            <TouchableOpacity 
+              style={[
+                styles.languageBtn,
+                langue === 'fr' && styles.languageBtnActive,
+              ]}
+              onPress={() => modifierLangue('fr')}
+            >
+              <Text style={[
+                styles.languageBtnText,
+                langue === 'fr' && styles.languageBtnTextActive,
+              ]}>🇫🇷 {t('systemSettings.french')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[
+                styles.languageBtn,
+                langue === 'en' && styles.languageBtnActive,
+              ]}
+              onPress={() => modifierLangue('en')}
+            >
+              <Text style={[
+                styles.languageBtnText,
+                langue === 'en' && styles.languageBtnTextActive,
+              ]}>🇺🇸 {t('systemSettings.english')}</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={[styles.inputLabel, { marginTop: 12, color: COLORS.textDim }]}>{t('systemSettings.currentLanguage')} {langue === 'fr' ? t('systemSettings.french') : t('systemSettings.english')}</Text>
+        </View>
+
         {/* STATUS */}
         <View style={styles.card}>
-          <SectionHeader icon="📊" title="STATUS" color={COLORS.teal} />
-          <View style={styles.statusRow}><Text style={styles.statusLabel}>MQTT Broker</Text><Text style={[styles.statusVal, { color: COLORS.green }]}>CONNECTED</Text></View>
-          <View style={styles.statusRow}><Text style={styles.statusLabel}>Active Devices</Text><Text style={styles.statusVal}>2/3</Text></View>
-          <View style={styles.statusRow}><Text style={styles.statusLabel}>Pending Auth</Text><Text style={styles.statusVal}>0</Text></View>
-          <View style={styles.statusRow}><Text style={styles.statusLabel}>Network Latency</Text><Text style={[styles.statusVal, { color: COLORS.green }]}>12ms</Text></View>
+          <SectionHeader icon="📊" title={t('systemSettings.status')} color={COLORS.teal} />
+          <View style={styles.statusRow}><Text style={styles.statusLabel}>{t('systemSettings.mqttBroker')}</Text><Text style={[styles.statusVal, { color: COLORS.green }]}>{t('common.connected')}</Text></View>
+          <View style={styles.statusRow}><Text style={styles.statusLabel}>{t('systemSettings.activeDevicesCount')}</Text><Text style={styles.statusVal}>2/3</Text></View>
+          <View style={styles.statusRow}><Text style={styles.statusLabel}>{t('systemSettings.pendingAuth')}</Text><Text style={styles.statusVal}>0</Text></View>
+          <View style={styles.statusRow}><Text style={styles.statusLabel}>{t('systemSettings.networkLatency')}</Text><Text style={[styles.statusVal, { color: COLORS.green }]}>12ms</Text></View>
         </View>
 
         {/* QUICK ACTIONS */}
         <View style={styles.card}>
-          <SectionHeader icon="⚡" title="QUICK ACTIONS" color={COLORS.amber} />
-          <TouchableOpacity style={styles.qaBtn}><Text style={styles.qaBtnText}>View All Settings</Text></TouchableOpacity>
-          <TouchableOpacity style={[styles.qaBtn, { marginTop: 8, borderColor: COLORS.teal }]}><Text style={[styles.qaBtnText, { color: COLORS.teal }]}>Export Config</Text></TouchableOpacity>
-          <TouchableOpacity style={[styles.qaBtn, { marginTop: 8, borderColor: COLORS.red }]}><Text style={[styles.qaBtnText, { color: COLORS.red }]}>Reset to Defaults</Text></TouchableOpacity>
+          <SectionHeader icon="⚡" title={t('systemSettings.quickActions')} color={COLORS.amber} />
+          <TouchableOpacity style={styles.qaBtn}><Text style={styles.qaBtnText}>{t('systemSettings.viewAllSettings')}</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.qaBtn, { marginTop: 8, borderColor: COLORS.teal }]}><Text style={[styles.qaBtnText, { color: COLORS.teal }]}>{t('systemSettings.exportConfig')}</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.qaBtn, { marginTop: 8, borderColor: COLORS.red }]}><Text style={[styles.qaBtnText, { color: COLORS.red }]}>{t('systemSettings.resetDefaults')}</Text></TouchableOpacity>
         </View>
 
         <View style={{ height: 32 }} />
@@ -315,4 +353,9 @@ const styles = StyleSheet.create({
   statusVal: { color: COLORS.white, fontSize: 12, fontWeight: '700' },
   qaBtn: { borderWidth: 1, borderColor: COLORS.green, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
   qaBtnText: { color: COLORS.green, fontSize: 12, fontWeight: '700' },
+  languageRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  languageBtn: { flex: 1, borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: 8, paddingVertical: 12, alignItems: 'center', backgroundColor: COLORS.inputBg },
+  languageBtnActive: { borderColor: COLORS.amber, backgroundColor: '#2a1f0a', borderWidth: 2 },
+  languageBtnText: { color: COLORS.text, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+  languageBtnTextActive: { color: COLORS.amber },
 });
