@@ -84,17 +84,17 @@ export default function AccessHistory({ navigation }) {
           <Text style={styles.logoGuard}>GUARD</Text>
           <View style={styles.mqttBadge}>
             <View style={styles.mqttDot} />
-            <Text style={styles.mqttText}>MQTT ONLINE</Text>
+            <Text style={styles.mqttText}>{t('login.mqttBadge')}</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
-          <Text style={styles.headerTime}>Admin</Text>
+          <Text style={styles.headerTime}>{t('common.admin')}</Text>
           <View style={styles.avatarCircle}><Text>👤</Text></View>
         </View>
       </View>
       {/* Dropdown */}
       <View style={styles.dropdown}>
-        <Text style={styles.dropdownText}>Access History (Detailed Log)</Text>
+        <Text style={styles.dropdownText}>{t('accessHistory.dropdownLabel')}</Text>
         <Text style={styles.dropdownArrow}>▼</Text>
       </View>
 
@@ -102,15 +102,15 @@ export default function AccessHistory({ navigation }) {
         {/* Page title */}
         <View style={styles.pageTitleRow}>
           <View>
-            <Text style={styles.pageTitle}>ACCESS HISTORY</Text>
-            <Text style={styles.pageSubtitle}>Detailed biometric access event log</Text>
+            <Text style={styles.pageTitle}>{t('accessHistory.title')}</Text>
+            <Text style={styles.pageSubtitle}>{t('accessHistory.detailedLog')}</Text>
           </View>
           <View style={styles.titleBtns}>
             <TouchableOpacity style={styles.exportBtn}>
-              <Text style={styles.exportBtnText}>↓ EXPORT</Text>
+              <Text style={styles.exportBtnText}>{t('accessHistory.export')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.shareBtn}>
-              <Text style={styles.shareBtnText}>↗ SHARE</Text>
+              <Text style={styles.shareBtnText}>{t('accessHistory.share')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -119,48 +119,48 @@ export default function AccessHistory({ navigation }) {
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { borderColor: COLORS.green }]}>
             <Text style={[styles.statNum, { color: COLORS.green }]}>247</Text>
-            <Text style={styles.statLabel}>GRANTED</Text>
+            <Text style={styles.statLabel}>{t('accessHistory.granted')}</Text>
             <Text style={styles.statIcon}>✓</Text>
           </View>
           <View style={[styles.statCard, { borderColor: COLORS.red }]}>
             <Text style={[styles.statNum, { color: COLORS.red }]}>18</Text>
-            <Text style={styles.statLabel}>DENIED</Text>
+            <Text style={styles.statLabel}>{t('accessHistory.denied')}</Text>
             <Text style={styles.statIcon}>✗</Text>
           </View>
           <View style={[styles.statCard, { borderColor: COLORS.amber }]}>
             <Text style={[styles.statNum, { color: COLORS.amber }]}>5</Text>
-            <Text style={styles.statLabel}>ERRORS</Text>
+            <Text style={styles.statLabel}>{t('accessHistory.errors')}</Text>
             <Text style={styles.statIcon}>⚠</Text>
           </View>
         </View>
 
         {/* Filters card */}
         <View style={styles.card}>
-          <Text style={styles.filterTitle}>FILTERS & SEARCH</Text>
+          <Text style={styles.filterTitle}>{t('accessHistory.filtersAndSearch')}</Text>
           <View style={styles.filtersGrid}>
             <View style={styles.filterHalf}>
-              <Text style={styles.filterLabel}>DATE RANGE</Text>
+              <Text style={styles.filterLabel}>{t('accessHistory.dateRange')}</Text>
               <View style={styles.filterSelect}>
                 <Text style={styles.filterSelectText}>Last 24 Hours</Text>
                 <Text style={styles.filterArrow}>▼</Text>
               </View>
             </View>
             <View style={styles.filterHalf}>
-              <Text style={styles.filterLabel}>DEVICE</Text>
+              <Text style={styles.filterLabel}>{t('accessHistory.device')}</Text>
               <View style={styles.filterSelect}>
                 <Text style={styles.filterSelectText}>All Devices</Text>
                 <Text style={styles.filterArrow}>▼</Text>
               </View>
             </View>
             <View style={styles.filterHalf}>
-              <Text style={styles.filterLabel}>RESULT</Text>
+              <Text style={styles.filterLabel}>{t('accessHistory.result')}</Text>
               <View style={styles.filterSelect}>
                 <Text style={styles.filterSelectText}>All Results</Text>
                 <Text style={styles.filterArrow}>▼</Text>
               </View>
             </View>
             <View style={styles.filterHalf}>
-              <Text style={styles.filterLabel}>USER</Text>
+              <Text style={styles.filterLabel}>{t('accessHistory.user')}</Text>
               <View style={styles.filterSelect}>
                 <Text style={styles.filterSelectText}>All Users</Text>
                 <Text style={styles.filterArrow}>▼</Text>
@@ -171,7 +171,7 @@ export default function AccessHistory({ navigation }) {
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search events..."
+              placeholder={t('accessHistory.searchPlaceholder')}
               placeholderTextColor={COLORS.textDim}
               value={search}
               onChangeText={setSearch}
@@ -181,7 +181,7 @@ export default function AccessHistory({ navigation }) {
 
         {/* Event log */}
         <View style={styles.card}>
-          <Text style={styles.filterTitle}>EVENT LOG</Text>
+          <Text style={styles.filterTitle}>{t('accessHistory.eventLog')}</Text>
           {events.map((item) => (
             <EventRow
               key={item.id}

@@ -70,18 +70,18 @@ export default function EnrollUser({ navigation }) {
           <Text style={styles.logoGuard}>GUARD</Text>
           <View style={styles.mqttBadge}>
             <View style={styles.mqttDot} />
-            <Text style={styles.mqttText}>MQTT ONLINE</Text>
+            <Text style={styles.mqttText}>{t('login.mqttBadge')}</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
           <Text style={styles.headerTime}>12:19:13   UTC+4</Text>
           <View style={styles.avatarCircle}><Text style={styles.avatarEmoji}>👤</Text></View>
-          <Text style={styles.adminText}>Admin</Text>
+          <Text style={styles.adminText}>{t('common.admin')}</Text>
         </View>
       </View>
 
       <View style={styles.dropdown}>
-        <Text style={styles.dropdownText}>User Management (Roles/List)</Text>
+        <Text style={styles.dropdownText}>{t('enrollment.dropdownLabel')}</Text>
         <Text style={styles.dropdownArrow}>▼</Text>
       </View>
 
@@ -100,50 +100,50 @@ export default function EnrollUser({ navigation }) {
             <Text style={styles.backIcon}>←</Text>
           </TouchableOpacity>
           <View style={styles.titleTextWrap}>
-            <Text style={styles.pageTitle}>ADD / ENROLL USER</Text>
-            <Text style={styles.pageSubtitle}>Complete user profile and biometric enrollment</Text>
+            <Text style={styles.pageTitle}>{t('enrollment.title')}</Text>
+            <Text style={styles.pageSubtitle}>{t('enrollment.subtitle')}</Text>
           </View>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>👥 USER PROFILE</Text>
+          <Text style={styles.cardTitle}>{t('enrollment.userProfile')}</Text>
 
           <View style={styles.photoWrap}>
             <View style={styles.photoCircle}><Text style={styles.photoEmoji}>👩</Text></View>
             <TouchableOpacity style={styles.captureBtn}>
-              <Text style={styles.captureBtnText}>▣ CAPTURE PHOTO</Text>
+              <Text style={styles.captureBtnText}>{t('enrollment.capturePhoto')}</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.row2}>
             <View style={styles.fieldHalf}>
-              <Text style={styles.fieldLabel}>FULL NAME</Text>
+              <Text style={styles.fieldLabel}>{t('enrollment.fullName')}</Text>
               <TextInput style={styles.input} value={fullName} onChangeText={setFullName} />
             </View>
             <View style={styles.fieldHalf}>
-              <Text style={styles.fieldLabel}>EMPLOYEE ID</Text>
+              <Text style={styles.fieldLabel}>{t('enrollment.employeeId')}</Text>
               <TextInput style={styles.input} value={employeeId} onChangeText={setEmployeeId} />
             </View>
           </View>
 
-          <Text style={styles.fieldLabel}>EMAIL</Text>
+          <Text style={styles.fieldLabel}>{t('enrollment.email')}</Text>
           <TextInput style={styles.input} value={email} onChangeText={setEmail} />
 
           <View style={styles.row2}>
             <View style={styles.fieldHalf}>
-              <Text style={styles.fieldLabel}>ROLE</Text>
+              <Text style={styles.fieldLabel}>{t('enrollment.role')}</Text>
               <View style={styles.selectInput}>
-                <Text style={styles.selectText}>Select Role</Text>
+                <Text style={styles.selectText}>{t('enrollment.selectRole')}</Text>
                 <Text style={styles.selectArrow}>▼</Text>
               </View>
             </View>
             <View style={styles.fieldHalf}>
-              <Text style={styles.fieldLabel}>DEPARTMENT</Text>
+              <Text style={styles.fieldLabel}>{t('enrollment.department')}</Text>
               <TextInput style={styles.input} value={department} onChangeText={setDepartment} />
             </View>
           </View>
 
-          <Text style={styles.fieldLabel}>ACCESS GROUPS</Text>
+          <Text style={styles.fieldLabel}>{t('enrollment.accessGroups')}</Text>
           <View style={styles.groupGrid}>
             <CheckItem label="Main Entrance" checked={groupMain} onToggle={() => setGroupMain(!groupMain)} />
             <CheckItem label="Server Room" checked={groupServer} onToggle={() => setGroupServer(!groupServer)} />
@@ -151,7 +151,7 @@ export default function EnrollUser({ navigation }) {
             <CheckItem label="Admin Office" checked={groupAdmin} onToggle={() => setGroupAdmin(!groupAdmin)} />
           </View>
 
-          <Text style={styles.fieldLabel}>NOTES</Text>
+          <Text style={styles.fieldLabel}>{t('enrollment.notes')}</Text>
           <TextInput
             style={[styles.input, styles.notesInput]}
             placeholder="Additional notes..."
@@ -163,7 +163,7 @@ export default function EnrollUser({ navigation }) {
         </View>
 
         <View style={styles.card}>
-          <Text style={[styles.cardTitle, { color: COLORS.magenta }]}>✋ VEIN CAPTURE</Text>
+          <Text style={[styles.cardTitle, { color: COLORS.magenta }]}>{t('enrollment.veinCapture')}</Text>
 
           <View style={styles.scannerBox}>
             <Text style={styles.scannerHand}>✋</Text>
@@ -171,7 +171,7 @@ export default function EnrollUser({ navigation }) {
           </View>
 
           <TouchableOpacity style={styles.startBtn}>
-            <Text style={styles.startBtnText}>▶ START CAPTURE</Text>
+            <Text style={styles.startBtnText}>{t('enrollment.startCapture')}</Text>
           </TouchableOpacity>
 
           <View style={styles.captureMeta}>
@@ -182,7 +182,7 @@ export default function EnrollUser({ navigation }) {
         </View>
 
         <View style={styles.card}>
-          <Text style={[styles.cardTitle, { color: COLORS.amber }]}>📶 ENROLLMENT STATUS</Text>
+          <Text style={[styles.cardTitle, { color: COLORS.amber }]}>{t('enrollment.enrollmentStatus')}</Text>
           <View style={styles.statusRow}>
             <View style={styles.statusBox}>
               <Text style={styles.statusDot}>○</Text>
@@ -203,23 +203,23 @@ export default function EnrollUser({ navigation }) {
         </View>
 
         <View style={[styles.card, styles.consentCard]}>
-          <Text style={[styles.cardTitle, styles.consentTitle]}>■ BIOMETRIC DATA CONSENT</Text>
+          <Text style={[styles.cardTitle, styles.consentTitle]}>{t('enrollment.biometricDataConsent')}</Text>
           <CheckItem
-            label="I consent to the collection, processing, and secure storage of my biometric data for access control purposes."
+            label={t('enrollment.consentCheckLabel')}
             checked={consent}
             onToggle={() => setConsent(!consent)}
           />
           <Text style={styles.consentText}>
-            This data will be encrypted and stored securely, used only for authentication, and may be deleted upon request in accordance with privacy regulations.
+            {t('enrollment.consentBodyText')}
           </Text>
         </View>
 
         <View style={styles.footerActions}>
           <TouchableOpacity style={styles.completeBtn}>
-            <Text style={styles.completeBtnText}>✓ COMPLETE ENROLLMENT</Text>
+            <Text style={styles.completeBtnText}>{t('enrollment.completeEnrollment')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation?.goBack()}>
-            <Text style={styles.cancelBtnText}>✕ CANCEL</Text>
+            <Text style={styles.cancelBtnText}>{t('enrollment.cancelBtn')}</Text>
           </TouchableOpacity>
         </View>
 

@@ -102,10 +102,10 @@ export default function Login({ navigation }) {
             <Text style={styles.logoVein}>VEIN</Text>
             <Text style={styles.logoGuard}>GUARD</Text>
           </Text>
-          <Text style={[styles.logoSubtitle, { letterSpacing: subtitleSpacing, fontSize: Math.max(9, Math.round((isVeryShort ? 10 : 11) * uiScale)), marginBottom: isVeryShort ? 10 : 14 }]}>BIOMETRIC ACCESS CONTROL</Text>
+          <Text style={[styles.logoSubtitle, { letterSpacing: subtitleSpacing, fontSize: Math.max(9, Math.round((isVeryShort ? 10 : 11) * uiScale)), marginBottom: isVeryShort ? 10 : 14 }]}>{t('login.subtitle')}</Text>
           <View style={styles.mqttBadge}>
             <View style={styles.mqttDot} />
-            <Text style={[styles.mqttText, { fontSize: Math.max(10, Math.round(11 * uiScale)) }]}>MQTT ONLINE</Text>
+            <Text style={[styles.mqttText, { fontSize: Math.max(10, Math.round(11 * uiScale)) }]}>{t('login.mqttBadge')}</Text>
           </View>
         </View>
 
@@ -118,11 +118,11 @@ export default function Login({ navigation }) {
           <View style={styles.fieldGroup}>
             <Text style={[styles.fieldLabel, { fontSize: fieldLabelSize }]}>
                             <Text style={styles.fieldIcon}>👤 </Text>
-                            {t('systemSettings.username')}
+                            {t('login.emailLabel')}
                           </Text>
             <TextInput
               style={[styles.input, { paddingVertical: inputVertical, fontSize: inputSize }]}
-              placeholder="Enter username or email"
+              placeholder={t('login.emailPlaceholder')}
               placeholderTextColor={COLORS.textDim}
               value={username}
               onChangeText={setUsername}
@@ -135,12 +135,12 @@ export default function Login({ navigation }) {
           <View style={styles.fieldGroup}>
             <Text style={[styles.fieldLabel, { fontSize: fieldLabelSize }]}>
               <Text style={styles.fieldIcon}>🔒 </Text>
-              {t('systemSettings.password')}
+              {t('login.passwordLabel')}
             </Text>
             <View style={styles.passwordRow}>
               <TextInput
                 style={[styles.input, styles.passwordInput, { paddingVertical: inputVertical, fontSize: inputSize }]}
-                placeholder={t('systemSettings.enterPassword')}
+                placeholder={t('login.passwordPlaceholder')}
                 placeholderTextColor={COLORS.textDim}
                 value={password}
                 onChangeText={setPassword}
@@ -164,7 +164,7 @@ export default function Login({ navigation }) {
           >
             <View style={styles.domainLeft}>
               <Text style={styles.domainIcon}>🛡</Text>
-              <Text style={[styles.domainLabel, { fontSize: fieldLabelSize }]}>ADMIN DOMAIN</Text>
+              <Text style={[styles.domainLabel, { fontSize: fieldLabelSize }]}>{t('login.adminDomain')}</Text>
             </View>
             <TouchableOpacity style={[styles.domainDropdown, isNarrow && styles.domainDropdownCompact]}>
               <Text style={[styles.domainDropdownText, { fontSize: Math.max(11, Math.round(12 * uiScale)) }]}>{domain}  ▼</Text>
@@ -173,31 +173,31 @@ export default function Login({ navigation }) {
 
           {/* FORGOT PASSWORD */}
           <TouchableOpacity style={styles.forgotRow}>
-            <Text style={[styles.forgotText, { fontSize: Math.max(11, Math.round(12 * uiScale)) }]}>🔑 FORGOT PASSWORD?</Text>
+            <Text style={[styles.forgotText, { fontSize: Math.max(11, Math.round(12 * uiScale)) }]}>🔑 {t('login.forgotPassword')}</Text>
           </TouchableOpacity>
 
           {/* ACCESS SYSTEM BUTTON */}
           <TouchableOpacity style={styles.accessBtn} onPress={() => navigation && navigation.navigate('Dashboard')}>
             <View style={[styles.accessBtnGradient, { paddingVertical: actionBtnVertical }]}> 
-              <Text style={[styles.accessBtnText, { fontSize: primaryBtnTextSize, letterSpacing: isNarrow ? 1.2 : 2 }]}>→) ACCESS SYSTEM</Text>
+              <Text style={[styles.accessBtnText, { fontSize: primaryBtnTextSize, letterSpacing: isNarrow ? 1.2 : 2 }]}>{t('login.accessSystem')}</Text>
             </View>
           </TouchableOpacity>
 
           {/* Divider */}
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR QUICK ACCESS</Text>
+            <Text style={styles.dividerText}>{t('login.orQuickAccess')}</Text>
             <View style={styles.dividerLine} />
           </View>
 
           {/* BIOMETRIC LOGIN */}
           <TouchableOpacity style={[styles.biometricBtn, { paddingVertical: actionBtnVertical }]}> 
-            <Text style={[styles.biometricBtnText, { fontSize: secondaryBtnTextSize, letterSpacing: isNarrow ? 1.2 : 2 }]}>〜 BIOMETRIC LOGIN</Text>
+            <Text style={[styles.biometricBtnText, { fontSize: secondaryBtnTextSize, letterSpacing: isNarrow ? 1.2 : 2 }]}>{t('login.biometricLogin')}</Text>
           </TouchableOpacity>
 
           {/* VEIN SCAN ACCESS */}
           <TouchableOpacity style={[styles.veinBtn, { paddingVertical: actionBtnVertical }]}> 
-            <Text style={[styles.veinBtnText, { fontSize: secondaryBtnTextSize, letterSpacing: isNarrow ? 1.2 : 2 }]}>✋ VEIN SCAN ACCESS</Text>
+            <Text style={[styles.veinBtnText, { fontSize: secondaryBtnTextSize, letterSpacing: isNarrow ? 1.2 : 2 }]}>{t('login.veinBtn')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -210,7 +210,7 @@ export default function Login({ navigation }) {
             <Text style={styles.footerSep}>|</Text>
             <Text style={styles.footerBadge}>🛡 AES-256</Text>
           </View>
-          <Text style={styles.footerCopy}>© 2024 VeinGuard Systems. All Rights Reserved.</Text>
+          <Text style={styles.footerCopy}>{t('login.footer')}</Text>
         </View>
         </View>
       </ScrollView>

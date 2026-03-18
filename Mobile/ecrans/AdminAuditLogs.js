@@ -102,7 +102,7 @@ export default function AdminAuditLogs() {
           <Text style={styles.logoGuard}>GUARD</Text>
           <View style={styles.mqttBadge}>
             <View style={styles.mqttDot} />
-            <Text style={styles.mqttText}>MQTT ONLINE</Text>
+            <Text style={styles.mqttText}>{t('login.mqttBadge')}</Text>
           </View>
         </View>
         <View style={styles.avatarCircle}><Text>👤</Text></View>
@@ -113,38 +113,38 @@ export default function AdminAuditLogs() {
         <View style={styles.titleRow}>
           <View style={styles.shieldBadge}><Text style={styles.shieldIcon}>🛡</Text></View>
           <View>
-            <Text style={styles.pageTitle}>ADMIN AUDIT &{'\n'}SECURITY LOGS</Text>
-            <Text style={styles.pageSubtitle}>Immutable security trail with authentication events</Text>
+            <Text style={styles.pageTitle}>{t('auditLogs.title')}</Text>
+            <Text style={styles.pageSubtitle}>{t('auditLogs.subtitle')}</Text>
           </View>
         </View>
         {/* Actions */}
         <View style={styles.actionsRow}>
           <TouchableOpacity style={styles.exportBtn}>
-            <Text style={styles.exportBtnText}>↓ EXPORT</Text>
+            <Text style={styles.exportBtnText}>{t('auditLogs.export')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.refreshBtn}>
-            <Text style={styles.refreshBtnText}>↺ REFRESH</Text>
+            <Text style={styles.refreshBtnText}>{t('auditLogs.refresh')}</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Threat Summary */}
       <View style={styles.threatCard}>
-        <Text style={styles.threatTitle}>⚠ THREAT SUMMARY</Text>
+        <Text style={styles.threatTitle}>{t('auditLogs.threatSummary')}</Text>
         <View style={styles.threatRow}>
-          <Text style={styles.threatLabel}>Critical Alerts</Text>
+          <Text style={styles.threatLabel}>{t('auditLogs.criticalAlerts')}</Text>
           <Text style={[styles.threatVal, { color: COLORS.red }]}>3</Text>
         </View>
         <View style={styles.threatRow}>
-          <Text style={styles.threatLabel}>High Priority</Text>
+          <Text style={styles.threatLabel}>{t('auditLogs.highPriority')}</Text>
           <Text style={[styles.threatVal, { color: COLORS.amber }]}>12</Text>
         </View>
         <View style={styles.threatRow}>
-          <Text style={styles.threatLabel}>Medium Priority</Text>
+          <Text style={styles.threatLabel}>{t('auditLogs.mediumPriority')}</Text>
           <Text style={[styles.threatVal, { color: '#f0a020' }]}>28</Text>
         </View>
         <View style={[styles.threatRow, { borderBottomWidth: 0 }]}>
-          <Text style={styles.threatLabel}>Failed Attempts (24h)</Text>
+          <Text style={styles.threatLabel}>{t('auditLogs.failedAttempts')}</Text>
           <Text style={[styles.threatVal, { color: COLORS.white }]}>47</Text>
         </View>
       </View>
@@ -166,9 +166,9 @@ export default function AdminAuditLogs() {
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.auditCard}>
           <View style={styles.auditHeader}>
-            <Text style={styles.auditTitle}>IMMUTABLE AUDIT TRAIL</Text>
+            <Text style={styles.auditTitle}>{t('auditLogs.immutableAuditTrail')}</Text>
             <View style={styles.cryptoBadge}>
-              <Text style={styles.cryptoText}>🔒 SECURED</Text>
+              <Text style={styles.cryptoText}>{t('auditLogs.secured')}</Text>
             </View>
           </View>
           {logs.map((item, i) => (
@@ -191,7 +191,7 @@ export default function AdminAuditLogs() {
             </View>
           ))}
           <View style={styles.tamperProof}>
-            <Text style={styles.tamperProofText}>TAMPER-PROOF</Text>
+            <Text style={styles.tamperProofText}>{t('auditLogs.tamperProof')}</Text>
           </View>
         </View>
 

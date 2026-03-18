@@ -51,9 +51,9 @@ const Header = () => (
   </View>
 );
 
-const DropdownBar = () => (
+const DropdownBar = ({ t }) => (
   <View style={styles.dropdown}>
-    <Text style={styles.dropdownText}>Dashboard (ESP32 Status)</Text>
+    <Text style={styles.dropdownText}>{t('accessDecision.dropdownLabel')}</Text>
     <Text style={styles.dropdownArrow}>▼</Text>
   </View>
 );
@@ -95,16 +95,16 @@ const UserCard = ({ t }) => (
       <Text style={styles.detailValue}>Engineering</Text>
     </View>
     <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>Access Level</Text>
+      <Text style={styles.detailLabel}>{t('accessDecision.accessLevel')}</Text>
       <Text style={[styles.detailValue, styles.greenText]}>Level 3</Text>
     </View>
   </View>
 );
 
-const ConfidenceScore = () => (
+const ConfidenceScore = ({ t }) => (
   <View style={styles.card}>
     <View style={styles.confidenceHeader}>
-      <Text style={styles.detailLabel}>Confidence Score</Text>
+      <Text style={styles.detailLabel}>{t('accessDecision.confidenceScore')}</Text>
       <Text style={styles.confidenceValue}>98.7%</Text>
     </View>
     <View style={styles.progressBarBg}>
@@ -113,81 +113,81 @@ const ConfidenceScore = () => (
   </View>
 );
 
-const DeviceInfo = () => (
+const DeviceInfo = ({ t }) => (
   <View style={styles.card}>
     <View style={styles.deviceGrid}>
       <View style={styles.deviceCell}>
-        <Text style={styles.deviceLabel}>Device ID</Text>
+        <Text style={styles.deviceLabel}>{t('accessDecision.deviceId')}</Text>
         <Text style={styles.deviceValue}>ESP32-01</Text>
       </View>
       <View style={styles.deviceCell}>
-        <Text style={styles.deviceLabel}>Door ID</Text>
+        <Text style={styles.deviceLabel}>{t('accessDecision.doorId')}</Text>
         <Text style={styles.deviceValue}>DOOR-A12</Text>
       </View>
       <View style={styles.deviceCell}>
-        <Text style={styles.deviceLabel}>Timestamp</Text>
+        <Text style={styles.deviceLabel}>{t('accessDecision.timestamp')}</Text>
         <Text style={styles.deviceValue}>10:28:00</Text>
       </View>
       <View style={styles.deviceCell}>
-        <Text style={styles.deviceLabel}>Event ID</Text>
+        <Text style={styles.deviceLabel}>{t('accessDecision.eventId')}</Text>
         <Text style={styles.deviceValue}>EVT-8743</Text>
       </View>
     </View>
   </View>
 );
 
-const ActionButtons = () => (
+const ActionButtons = ({ t }) => (
   <View style={styles.actionsContainer}>
     <TouchableOpacity style={styles.btnViewEvent}>
-      <Text style={styles.btnViewEventText}>ℹ  VIEW EVENT DETAILS</Text>
+      <Text style={styles.btnViewEventText}>{t('accessDecision.viewEventDetails')}</Text>
     </TouchableOpacity>
     <TouchableOpacity style={styles.btnRetry}>
-      <Text style={styles.btnRetryText}>↻  RETRY SCAN</Text>
+      <Text style={styles.btnRetryText}>{t('accessDecision.retryScan')}</Text>
     </TouchableOpacity>
     <TouchableOpacity style={styles.btnReport}>
-      <Text style={styles.btnReportText}>⚠  REPORT ISSUE</Text>
+      <Text style={styles.btnReportText}>{t('accessDecision.reportIssue')}</Text>
     </TouchableOpacity>
   </View>
 );
 
-const AudioFeedback = () => {
+const AudioFeedback = ({ t }) => {
   const [on, setOn] = useState(true);
   return (
     <View style={styles.sectionCard}>
       <View style={styles.sectionTitleRow}>
         <Text style={styles.sectionIcon}>🔊</Text>
-        <Text style={styles.sectionTitle}>AUDIO FEEDBACK</Text>
+        <Text style={styles.sectionTitle}>{t('accessDecision.audioFeedback')}</Text>
       </View>
       <View style={styles.sectionDivider} />
       <View style={styles.sectionRow}>
-        <Text style={styles.sectionRowLabel}>Audible Confirmation</Text>
+        <Text style={styles.sectionRowLabel}>{t('accessDecision.audibleConfirmation')}</Text>
         <TouchableOpacity
           style={[styles.toggleBtn, on ? styles.toggleOn : styles.toggleOff]}
           onPress={() => setOn(!on)}
         >
-          <Text style={styles.toggleText}>{on ? '🔊 ON' : '🔇 OFF'}</Text>
+          <Text style={styles.toggleText}>{on ? t('accessDecision.audioOn') : t('accessDecision.audioOff')}</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 };
 
-const DoorStatus = () => {
+const DoorStatus = ({ t }) => {
   const [locked, setLocked] = useState(false);
   return (
     <View style={styles.sectionCard}>
       <View style={styles.sectionTitleRow}>
         <Text style={styles.sectionIcon}>🚪</Text>
-        <Text style={styles.sectionTitle}>DOOR STATUS</Text>
+        <Text style={styles.sectionTitle}>{t('accessDecision.doorStatus')}</Text>
       </View>
       <View style={styles.sectionDivider} />
       <View style={styles.sectionRow}>
-        <Text style={styles.sectionRowLabel}>Door Lock</Text>
+        <Text style={styles.sectionRowLabel}>{t('accessDecision.doorLock')}</Text>
         <TouchableOpacity
           style={[styles.toggleBtn, !locked ? styles.toggleOn : styles.toggleOff]}
           onPress={() => setLocked(!locked)}
         >
-          <Text style={styles.toggleText}>{!locked ? '🔓 UNLOCKED' : '🔒 LOCKED'}</Text>
+          <Text style={styles.toggleText}>{!locked ? t('accessDecision.unlocked') : t('accessDecision.locked')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -210,11 +210,11 @@ export default function AccessDecision() {
       >
         <AccessGrantedBadge t={t} />
         <UserCard t={t} />
-        <ConfidenceScore />
-        <DeviceInfo />
-        <ActionButtons />
-        <AudioFeedback />
-        <DoorStatus />
+        <ConfidenceScore t={t} />
+        <DeviceInfo t={t} />
+        <ActionButtons t={t} />
+        <AudioFeedback t={t} />
+        <DoorStatus t={t} />
         <View style={{ height: 32 }} />
       </ScrollView>
     </View>

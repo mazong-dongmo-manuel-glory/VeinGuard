@@ -84,6 +84,7 @@ function StatusBadge({ status, color }) {
 }
 
 function UserCard({ user }) {
+  const { t } = useTranslation();
   const isActivate = user.actions.includes('activate');
   const isDelete = user.actions.includes('delete');
   return (
@@ -106,15 +107,15 @@ function UserCard({ user }) {
       </View>
       <View style={styles.userDetails}>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Last Access</Text>
+          <Text style={styles.detailLabel}>{t('userManagement.lastAccess')}</Text>
           <Text style={styles.detailValue}>{user.lastAccess}</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Device</Text>
+          <Text style={styles.detailLabel}>{t('userManagement.device')}</Text>
           <Text style={[styles.detailValue, { color: COLORS.teal }]}>{user.device}</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Enrollments</Text>
+          <Text style={styles.detailLabel}>{t('userManagement.enrollments')}</Text>
           <Text style={styles.detailValue}>{user.enrollments}</Text>
         </View>
       </View>
@@ -122,19 +123,19 @@ function UserCard({ user }) {
         {isActivate ? (
           <>
             <TouchableOpacity style={[styles.actionBtn, styles.activateBtn]}>
-              <Text style={[styles.actionBtnText, { color: COLORS.green }]}>✓ ACTIVATE</Text>
+              <Text style={[styles.actionBtnText, { color: COLORS.green }]}>{t('userManagement.activateBtn')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.actionBtn, styles.deleteBtn]}>
-              <Text style={[styles.actionBtnText, { color: COLORS.red }]}>✕ DELETE</Text>
+              <Text style={[styles.actionBtnText, { color: COLORS.red }]}>{t('userManagement.deleteBtn')}</Text>
             </TouchableOpacity>
           </>
         ) : (
           <>
             <TouchableOpacity style={[styles.actionBtn, styles.editBtn]}>
-              <Text style={[styles.actionBtnText, { color: COLORS.green }]}>✏ EDIT</Text>
+              <Text style={[styles.actionBtnText, { color: COLORS.green }]}>{t('userManagement.editBtn')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.actionBtn, styles.suspendBtn]}>
-              <Text style={[styles.actionBtnText, { color: COLORS.amber }]}>⏸ SUSPEND</Text>
+              <Text style={[styles.actionBtnText, { color: COLORS.amber }]}>{t('userManagement.suspendBtn')}</Text>
             </TouchableOpacity>
           </>
         )}
@@ -157,17 +158,17 @@ export default function UserManagement({ navigation }) {
           <Text style={styles.logoGuard}>GUARD</Text>
           <View style={styles.mqttBadge}>
             <View style={styles.mqttDot} />
-            <Text style={styles.mqttText}>MQTT ONLINE</Text>
+            <Text style={styles.mqttText}>{t('login.mqttBadge')}</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
           <Text style={styles.headerTime}>15:04:00   UTC+0</Text>
           <View style={styles.avatarCircle}><Text>👤</Text></View>
-          <Text style={styles.adminText}>Admin</Text>
+          <Text style={styles.adminText}>{t('common.admin')}</Text>
         </View>
       </View>
       <View style={styles.dropdown}>
-        <Text style={styles.dropdownText}>User Management (Roles/List)</Text>
+        <Text style={styles.dropdownText}>{t('userManagement.dropdownLabel')}</Text>
         <Text style={styles.dropdownArrow}>▼</Text>
       </View>
 
@@ -175,15 +176,15 @@ export default function UserManagement({ navigation }) {
         {/* Title row */}
         <View style={styles.titleRow}>
           <View>
-            <Text style={styles.pageTitle}>USER MANAGEMENT</Text>
-            <Text style={styles.pageSubtitle}>Manage user roles, permissions, and biometric data</Text>
+            <Text style={styles.pageTitle}>{t('userManagement.title')}</Text>
+            <Text style={styles.pageSubtitle}>{t('userManagement.subtitle')}</Text>
           </View>
           <TouchableOpacity
             style={styles.enrollBtn}
             onPress={() => navigation?.navigate('EnrollUser')}
             activeOpacity={0.85}
           >
-            <Text style={styles.enrollBtnText}>+ ADD / ENROLL USER</Text>
+              <Text style={styles.enrollBtnText}>{t('userManagement.addUser')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -193,7 +194,7 @@ export default function UserManagement({ navigation }) {
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search users..."
+              placeholder={t('userManagement.searchPlaceholder')}
               placeholderTextColor={COLORS.textDim}
               value={search}
               onChangeText={setSearch}
@@ -201,20 +202,20 @@ export default function UserManagement({ navigation }) {
           </View>
           <View style={styles.filterRow}>
             <View style={styles.filterSelect}>
-              <Text style={styles.filterText}>All Roles</Text>
+              <Text style={styles.filterText}>{t('userManagement.allRoles')}</Text>
               <Text style={styles.filterArrow}>▼</Text>
             </View>
           </View>
           <View style={styles.filterRow}>
             <View style={styles.filterSelect}>
-              <Text style={styles.filterText}>All Status</Text>
+              <Text style={styles.filterText}>{t('userManagement.allStatus')}</Text>
               <Text style={styles.filterArrow}>▼</Text>
             </View>
             <TouchableOpacity style={styles.bulkDisableBtn}>
-              <Text style={styles.bulkDisableBtnText}>⏸ BULK DISABLE</Text>
+              <Text style={styles.bulkDisableBtnText}>{t('userManagement.bulkDisable')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.firstChoiceBtn}>
-              <Text style={styles.firstChoiceBtnText}>★ FIRST CHOICE</Text>
+              <Text style={styles.firstChoiceBtnText}>{t('userManagement.firstChoice')}</Text>
             </TouchableOpacity>
           </View>
         </View>

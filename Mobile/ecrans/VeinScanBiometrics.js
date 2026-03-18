@@ -59,18 +59,18 @@ export default function VeinScanBiometrics() {
           <Text style={styles.logoGuard}>GUARD</Text>
           <View style={styles.mqttBadge}>
             <View style={styles.mqttDot} />
-            <Text style={styles.mqttText}>MQTT ONLINE</Text>
+            <Text style={styles.mqttText}>{t('login.mqttBadge')}</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
           <Text style={styles.headerTime}>12:32:00   UTC+0</Text>
           <View style={styles.avatarCircle}><Text>👤</Text></View>
-          <Text style={styles.adminText}>Admin</Text>
+          <Text style={styles.adminText}>{t('common.admin')}</Text>
         </View>
       </View>
       {/* Dropdown */}
       <View style={styles.dropdown}>
-        <Text style={styles.dropdownText}>Vein Scan (Biometric HUD)</Text>
+        <Text style={styles.dropdownText}>{t('veinScan.dropdownLabel')}</Text>
         <Text style={styles.dropdownArrow}>▼</Text>
       </View>
       {/* MQTT scroll ticker */}
@@ -82,19 +82,19 @@ export default function VeinScanBiometrics() {
         {/* Title */}
         <View style={styles.titleRow}>
           <View>
-            <Text style={styles.pageTitle}>BIOMETRIC SCANNER HUD</Text>
-            <Text style={styles.pageSubtitle}>Position hand over scanner for vein pattern capture</Text>
+            <Text style={styles.pageTitle}>{t('veinScan.title')}</Text>
+            <Text style={styles.pageSubtitle}>{t('veinScan.subtitle')}</Text>
           </View>
           <View style={styles.scannerStatus}>
-            <Text style={styles.scannerStatusText}>SCANNER STATUS</Text>
-            <Text style={[styles.scannerStatusValue, { color: COLORS.green }]}>ACTIVE</Text>
+            <Text style={styles.scannerStatusText}>{t('veinScan.scannerStatus')}</Text>
+            <Text style={[styles.scannerStatusValue, { color: COLORS.green }]}>{t('veinScan.active')}</Text>
           </View>
         </View>
 
         {/* Camera Preview */}
         <View style={styles.card}>
           <View style={styles.cameraHeader}>
-            <Text style={styles.cameraTitle}>CAMERA PREVIEW</Text>
+            <Text style={styles.cameraTitle}>{t('veinScan.cameraPreview')}</Text>
             <View style={styles.recBadge}>
               <View style={styles.recDot} />
               <Text style={styles.recText}>REC</Text>
@@ -124,54 +124,54 @@ export default function VeinScanBiometrics() {
 
         {/* Scan Quality */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>SCAN QUALITY</Text>
-          <QualityBar label="Signal Strength" value={87} color={COLORS.green} />
-          <QualityBar label="Pattern Clarity" value={64} color={COLORS.amber} />
-          <QualityBar label="Alignment" value={92} color={COLORS.teal} />
+          <Text style={styles.sectionTitle}>{t('veinScan.scanQuality')}</Text>
+          <QualityBar label={t('veinScan.signalStrength')} value={87} color={COLORS.green} />
+          <QualityBar label={t('veinScan.patternClarity')} value={64} color={COLORS.amber} />
+          <QualityBar label={t('veinScan.alignment')} value={92} color={COLORS.teal} />
         </View>
 
         {/* Scan Controls */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>SCAN CONTROLS</Text>
+          <Text style={styles.sectionTitle}>{t('veinScan.scanControls')}</Text>
           <TouchableOpacity
             style={[styles.ctrlBtn, styles.startBtn]}
             onPress={() => setScanning(true)}
           >
-            <Text style={styles.ctrlBtnText}>▶ START SCAN</Text>
+            <Text style={styles.ctrlBtnText}>{t('veinScan.startScan')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.ctrlBtn, styles.stopBtn]}
             onPress={() => setScanning(false)}
           >
-            <Text style={[styles.ctrlBtnText, { color: COLORS.red }]}>■ STOP SCAN</Text>
+            <Text style={[styles.ctrlBtnText, { color: COLORS.red }]}>{t('veinScan.stopScan')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.ctrlBtn, styles.irBtn]}>
-            <Text style={[styles.ctrlBtnText, { color: COLORS.amber }]}>💡 TOGGLE IR</Text>
+            <Text style={[styles.ctrlBtnText, { color: COLORS.amber }]}>{t('veinScan.toggleIr')}</Text>
           </TouchableOpacity>
         </View>
 
         {/* MQTT Status */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>MQTT STATUS</Text>
-          <View style={styles.mqttRow}><Text style={styles.mqttLabel}>Connection</Text><Text style={[styles.mqttVal, { color: COLORS.green }]}>ONLINE</Text></View>
-          <View style={styles.mqttRow}><Text style={styles.mqttLabel}>Last Publish</Text><Text style={styles.mqttVal}>2s ago</Text></View>
-          <View style={styles.mqttRow}><Text style={styles.mqttLabel}>Topic</Text><Text style={styles.mqttVal}>scan/request</Text></View>
+          <Text style={styles.sectionTitle}>{t('veinScan.mqttStatus')}</Text>
+          <View style={styles.mqttRow}><Text style={styles.mqttLabel}>{t('veinScan.connection')}</Text><Text style={[styles.mqttVal, { color: COLORS.green }]}>ONLINE</Text></View>
+          <View style={styles.mqttRow}><Text style={styles.mqttLabel}>{t('veinScan.lastPublish')}</Text><Text style={styles.mqttVal}>2s ago</Text></View>
+          <View style={styles.mqttRow}><Text style={styles.mqttLabel}>{t('veinScan.topic')}</Text><Text style={styles.mqttVal}>scan/request</Text></View>
         </View>
 
         {/* Manual ID Entry */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>MANUAL ID ENTRY (TESTING MODE)</Text>
-          <Text style={styles.manualLabel}>User ID</Text>
+          <Text style={styles.sectionTitle}>{t('veinScan.manualIdEntry')}</Text>
+          <Text style={styles.manualLabel}>{t('veinScan.userId')}</Text>
           <View style={styles.manualRow}>
             <TextInput
               style={styles.manualInput}
-              placeholder="Enter User ID for testing"
+              placeholder={t('veinScan.userIdPlaceholder')}
               placeholderTextColor={COLORS.textDim}
               value={userId}
               onChangeText={setUserId}
             />
             <TouchableOpacity style={styles.testBtn}>
-              <Text style={styles.testBtnText}>TEST ACCESS</Text>
+              <Text style={styles.testBtnText}>{t('veinScan.testAccess')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -180,8 +180,8 @@ export default function VeinScanBiometrics() {
         <View style={styles.privacyCard}>
           <Text style={styles.privacyIcon}>🔒</Text>
           <Text style={styles.privacyText}>
-            <Text style={styles.privacyBold}>Privacy Notice{'\n'}</Text>
-            Biometric data is processed locally and encrypted before transmission. No vein patterns are stored permanently. All scan data is automatically purged after authentication.
+            <Text style={styles.privacyBold}>{t('veinScan.privacyTitle')}{'\n'}</Text>
+            {t('veinScan.privacyText')}
           </Text>
         </View>
 

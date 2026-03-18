@@ -87,6 +87,7 @@ function PulsingDot({ color }) {
 }
 
 function DeviceCard({ device }) {
+  const { t } = useTranslation();
   return (
     <View style={[styles.deviceCard, { borderColor: device.borderColor + '55' }]}>
       {/* Card header */}
@@ -103,23 +104,23 @@ function DeviceCard({ device }) {
       {/* Stats */}
       <View style={styles.deviceStats}>
         <View style={styles.deviceRow}>
-          <Text style={styles.deviceLabel}>Status</Text>
+          <Text style={styles.deviceLabel}>{t('dashboard.status')}</Text>
           <Text style={[styles.deviceValue, { color: device.statusColor }]}>{device.status}</Text>
         </View>
         <View style={styles.deviceRow}>
-          <Text style={styles.deviceLabel}>Heartbeat</Text>
+          <Text style={styles.deviceLabel}>{t('dashboard.heartbeat')}</Text>
           <Text style={styles.deviceValue}>{device.heartbeat}</Text>
         </View>
         <View style={styles.deviceRow}>
-          <Text style={styles.deviceLabel}>RSSI</Text>
+          <Text style={styles.deviceLabel}>{t('dashboard.rssi')}</Text>
           <Text style={styles.deviceValue}>{device.rssi}</Text>
         </View>
         <View style={styles.deviceRow}>
-          <Text style={styles.deviceLabel}>Battery</Text>
+          <Text style={styles.deviceLabel}>{t('dashboard.battery')}</Text>
           <Text style={[styles.deviceValue, { color: device.batteryColor }]}>{device.battery}</Text>
         </View>
         <View style={[styles.deviceRow, { borderBottomWidth: 0 }]}>
-          <Text style={styles.deviceLabel}>Firmware</Text>
+          <Text style={styles.deviceLabel}>{t('dashboard.firmware')}</Text>
           <Text style={styles.deviceValue}>{device.firmware}</Text>
         </View>
       </View>
@@ -154,7 +155,7 @@ export default function Dashboard({ navigation }) {
           <Text style={styles.logoGuard}>GUARD</Text>
           <View style={styles.mqttBadge}>
             <PulsingDot color={COLORS.green} />
-            <Text style={styles.mqttText}>MQTT ONLINE</Text>
+            <Text style={styles.mqttText}>{t('login.mqttBadge')}</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
@@ -162,7 +163,7 @@ export default function Dashboard({ navigation }) {
           <View style={styles.avatarCircle}>
             <Text style={{ fontSize: 14 }}>👤</Text>
           </View>
-          <Text style={styles.adminText}>Admin</Text>
+          <Text style={styles.adminText}>{t('common.admin')}</Text>
         </View>
       </View>
 
@@ -170,7 +171,7 @@ export default function Dashboard({ navigation }) {
       <View style={styles.alertBanner}>
         <Text style={styles.alertIcon}>⚠</Text>
         <View style={{ flex: 1 }}>
-          <Text style={styles.alertTitle}>Security Alert Detected</Text>
+          <Text style={styles.alertTitle}>{t('dashboard.securityAlert')}</Text>
           <Text style={styles.alertSub}>Unusual access pattern detected on Device ESP32-01. Last failed attempt: 2 minutes ago.</Text>
         </View>
         <TouchableOpacity>
@@ -183,12 +184,12 @@ export default function Dashboard({ navigation }) {
         {/* Page title */}
         <View style={styles.titleRow}>
           <View>
-            <Text style={styles.pageTitle}>ESP32 DEVICE STATUS</Text>
-            <Text style={styles.pageSubtitle}>Real-time monitoring and control dashboard</Text>
+            <Text style={styles.pageTitle}>{t('dashboard.title')}</Text>
+            <Text style={styles.pageSubtitle}>{t('dashboard.subtitle')}</Text>
           </View>
           <View style={styles.systemStatus}>
-            <Text style={styles.systemStatusLabel}>SYSTEM STATUS</Text>
-            <Text style={styles.systemStatusValue}>OPERATIONAL</Text>
+            <Text style={styles.systemStatusLabel}>{t('dashboard.systemStatus')}</Text>
+            <Text style={styles.systemStatusValue}>{t('dashboard.operational')}</Text>
           </View>
         </View>
 
@@ -200,28 +201,28 @@ export default function Dashboard({ navigation }) {
         {/* MQTT Broker Status */}
         <View style={styles.mqttCard}>
           <View style={styles.mqttCardHeader}>
-            <Text style={styles.mqttCardTitle}>MQTT BROKER STATUS</Text>
+            <Text style={styles.mqttCardTitle}>{t('dashboard.mqttBrokerStatus')}</Text>
             <View style={styles.mqttConnected}>
               <View style={[styles.statusDot, { backgroundColor: COLORS.green }]} />
-              <Text style={styles.mqttConnectedText}>CONNECTED</Text>
+              <Text style={styles.mqttConnectedText}>{t('dashboard.connected')}</Text>
             </View>
           </View>
           <View style={styles.mqttStats}>
             <View style={styles.mqttStat}>
               <Text style={[styles.mqttStatNum, { color: COLORS.white }]}>47</Text>
-              <Text style={styles.mqttStatLabel}>MSG/SEC</Text>
+              <Text style={styles.mqttStatLabel}>{t('dashboard.messageRate')}</Text>
             </View>
             <View style={styles.mqttStat}>
               <Text style={[styles.mqttStatNum, { color: COLORS.teal }]}>3</Text>
-              <Text style={styles.mqttStatLabel}>ACTIVE DEVICES</Text>
+              <Text style={styles.mqttStatLabel}>{t('dashboard.activeDevices')}</Text>
             </View>
             <View style={styles.mqttStat}>
               <Text style={[styles.mqttStatNum, { color: COLORS.amber }]}>12</Text>
-              <Text style={styles.mqttStatLabel}>TOPICS</Text>
+              <Text style={styles.mqttStatLabel}>{t('dashboard.topics')}</Text>
             </View>
             <View style={styles.mqttStat}>
               <Text style={[styles.mqttStatNum, { color: COLORS.green }]}>99.6%</Text>
-              <Text style={styles.mqttStatLabel}>UPTIME</Text>
+              <Text style={styles.mqttStatLabel}>{t('dashboard.uptime')}</Text>
             </View>
           </View>
         </View>
@@ -233,7 +234,7 @@ export default function Dashboard({ navigation }) {
             onPress={() => navigation?.navigate('VeinScan')}
           >
             <Text style={styles.actionIcon}>✋</Text>
-            <Text style={[styles.actionLabel, { color: COLORS.purple }]}>START VEIN SCAN</Text>
+            <Text style={[styles.actionLabel, { color: COLORS.purple }]}>{t('dashboard.startVeinScan')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -241,7 +242,7 @@ export default function Dashboard({ navigation }) {
             onPress={() => navigation?.navigate('AccessHistory')}
           >
             <Text style={styles.actionIcon}>🕐</Text>
-            <Text style={[styles.actionLabel, { color: COLORS.teal }]}>VIEW HISTORY</Text>
+            <Text style={[styles.actionLabel, { color: COLORS.teal }]}>{t('dashboard.viewHistory')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -249,7 +250,7 @@ export default function Dashboard({ navigation }) {
             onPress={() => navigation?.navigate('UserManagement')}
           >
             <Text style={styles.actionIcon}>👥</Text>
-            <Text style={[styles.actionLabel, { color: COLORS.amber }]}>MANAGE USERS</Text>
+            <Text style={[styles.actionLabel, { color: COLORS.amber }]}>{t('dashboard.manageUsers')}</Text>
           </TouchableOpacity>
         </View>
 
