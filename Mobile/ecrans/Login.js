@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
+  Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -37,6 +38,35 @@ export default function Login({ navigation }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [domain, setDomain] = useState('Primary');
+
+  const handleLogin = async () => {
+    if (!username || !password) {
+      Alert.alert("Erreur", "Veuillez entrer un nom d'utilisateur et un mot de passe.");
+      return;
+    }
+
+    try {
+      const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'http://127.0.0.1:5000/api';
+      
+      const response = await fetch(`${API_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Enregistrez data.user dans votre state global/store si nécessaire plus tard
+        if (navigation) navigation.navigate('Dashboard');
+      } else {
+        Alert.alert("Échec de connexion", data.error || "Identifiants incorrects");
+      }
+    } catch (error) {
+      Alert.alert("Erreur réseau", "Impossible de joindre l'API Backend. Le serveur Flask run-t-il sur le port 5000 ?");
+      console.error(error);
+    }
+  };
 
   const viewportWidth = Math.min(width, 520);
   const isNarrow = viewportWidth < 360;
@@ -177,7 +207,7 @@ export default function Login({ navigation }) {
           </TouchableOpacity>
 
           {/* ACCESS SYSTEM BUTTON */}
-          <TouchableOpacity style={styles.accessBtn} onPress={() => navigation && navigation.navigate('Dashboard')}>
+          <TouchableOpacity style={styles.accessBtn} onPress={handleLogin}>
             <View style={[styles.accessBtnGradient, { paddingVertical: actionBtnVertical }]}> 
               <Text style={[styles.accessBtnText, { fontSize: primaryBtnTextSize, letterSpacing: isNarrow ? 1.2 : 2 }]}>{t('login.accessSystem')}</Text>
             </View>
