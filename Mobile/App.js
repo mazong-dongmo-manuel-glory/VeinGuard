@@ -4,15 +4,18 @@ import NavigationRoot from "./navigation/NavigationRoot";
 import initI18next from "./i18n";
 import { useLangueStore } from "./store/langueStore";
 import { useEffect, useState } from "react";
+import { useMqttStore } from "./store/mqttStore";
 
 export default function App() {
   const [pret, setPret] = useState(false);
   const langue = useLangueStore((state) => state.langue);
+  const connectMqtt = useMqttStore((state) => state.connect);
 
   useEffect(() => {
     initI18next(langue);
+    connectMqtt();
     setPret(true);
-  }, [langue]);
+  }, [langue, connectMqtt]);
 
   if (!pret) {
     return (

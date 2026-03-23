@@ -13,23 +13,10 @@ import {
   Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-
-const COLORS = {
-  bg: '#080e1a',
-  cardBg: '#0d1b2e',
-  cardBorder: '#1e3a5f',
-  green: '#00ff88',
-  teal: '#00e5ff',
-  magenta: '#ff00e5',
-  amber: '#f5a623',
-  text: '#b8cfe0',
-  textDim: '#4a6a8a',
-  white: '#ffffff',
-  inputBg: '#091525',
-  borderBlue: '#1a3a6a',
-  gradientStart: '#00e5ff',
-  gradientEnd: '#d000ff',
-};
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { useMqttStore } from '../store/mqttStore';
 
 export default function Login({ navigation }) {
   const { t } = useTranslation();
@@ -37,7 +24,9 @@ export default function Login({ navigation }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [domain, setDomain] = useState('Primary');
+  
+  const login = useMqttStore((state) => state.login);
+  const isConnected = useMqttStore((state) => state.isConnected);
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -45,205 +34,159 @@ export default function Login({ navigation }) {
       return;
     }
 
+    if (!isConnected) {
+      Alert.alert("Erreur Connexion", "Le système est hors-ligne. Veuillez vérifier le broker MQTT.");
+      return;
+    }
+
     try {
-      const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'http://127.0.0.1:5000/api';
-      
-      const response = await fetch(`${API_URL}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
+      const response = await login(username, password);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        // Enregistrez data.user dans votre state global/store si nécessaire plus tard
+      if (response && response.status === 'success') {
         if (navigation) navigation.navigate('Dashboard');
       } else {
-        Alert.alert("Échec de connexion", data.error || "Identifiants incorrects");
+        Alert.alert("Échec de connexion", response.error || "Identifiants incorrects");
       }
     } catch (error) {
-      Alert.alert("Erreur réseau", "Impossible de joindre l'API Backend. Le serveur Flask run-t-il sur le port 5000 ?");
+      Alert.alert("Erreur Système", "Le serveur de sécurité ne répond pas.");
       console.error(error);
     }
   };
 
   const viewportWidth = Math.min(width, 520);
-  const isNarrow = viewportWidth < 360;
-  const isCompact = viewportWidth < 340;
-  const isShort = height < 760;
-  const isVeryShort = height < 690;
-  const isTablet = viewportWidth >= 768;
-
-  // Keep the login screen on the same visual grid as the other screens.
-  const uiScale = Math.max(isVeryShort ? 0.88 : 0.93, Math.min(viewportWidth / 390, 1.02));
-  const horizontalPadding = 14;
-  const topPadding = isVeryShort ? 10 : isShort ? 14 : 28;
-  const bottomPadding = isVeryShort ? 56 : isShort ? 36 : 34;
-  const contentMaxWidth = isTablet ? 430 : viewportWidth - horizontalPadding * 2;
-
-  const logoSize = Math.round((isVeryShort ? 48 : 60) * uiScale);
-  const logoFontSize = Math.round((isVeryShort ? 24 : 28) * uiScale);
-  const subtitleSpacing = isCompact ? 3 : 4;
-  const cardPadding = Math.round((isVeryShort ? 12 : 16) * uiScale);
-  const inputVertical = Math.round((isVeryShort ? 9 : 11) * uiScale);
-  const actionBtnVertical = Math.round((isVeryShort ? 10 : 13) * uiScale);
-  const fieldLabelSize = Math.max(10, Math.round(11 * uiScale));
-  const inputSize = Math.max(12, Math.round((isVeryShort ? 13 : 14) * uiScale));
-  const primaryBtnTextSize = Math.max(13, Math.round(14 * uiScale));
-  const secondaryBtnTextSize = Math.max(12, Math.round(13 * uiScale));
-  const cardRadius = 10;
-  const cornerSize = 20;
-  const cornerOffset = 8;
+  const uiScale = Math.max(0.9, Math.min(viewportWidth / 390, 1.1));
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
-      {/* Corner decorations */}
-      <View style={[styles.corner, styles.cornerTL, { width: cornerSize, height: cornerSize, top: cornerOffset, left: cornerOffset }]} />
-      <View style={[styles.corner, styles.cornerTR, { width: cornerSize, height: cornerSize, top: cornerOffset, right: cornerOffset }]} />
-      <View style={[styles.corner, styles.cornerBL, { width: cornerSize, height: cornerSize, bottom: cornerOffset, left: cornerOffset }]} />
-      <View style={[styles.corner, styles.cornerBR, { width: cornerSize, height: cornerSize, bottom: cornerOffset, right: cornerOffset }]} />
+      <StatusBar barStyle="light-content" />
+      <LinearGradient
+        colors={GRADIENTS.primary}
+        style={StyleSheet.absoluteFill}
+      />
+      
+      {/* Decorative Blur Orbs */}
+      <View style={[styles.orb, { top: -50, left: -50, backgroundColor: COLORS.neonPurple }]} />
+      <View style={[styles.orb, { bottom: -100, right: -100, backgroundColor: COLORS.neonCyan }]} />
 
       <KeyboardAvoidingView
         style={styles.keyboardWrap}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
-          contentContainerStyle={[
-            styles.scroll,
-            {
-              paddingHorizontal: horizontalPadding,
-              paddingTop: topPadding,
-              paddingBottom: bottomPadding,
-              minHeight: height,
-            },
-          ]}
+          contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={[styles.contentWrap, { maxWidth: contentMaxWidth }]}> 
-          {/* Logo section */}
-          <View style={[styles.logoSection, { marginBottom: isVeryShort ? 12 : isCompact ? 18 : 24 }]}>
-            <View style={[styles.logoIconCircle, { width: logoSize, height: logoSize, borderRadius: logoSize / 2 }]}> 
-            <Text style={[styles.logoIconText, { fontSize: Math.round((isVeryShort ? 20 : 24) * uiScale) }]}>〜</Text>
-          </View>
-          <Text style={[styles.logoText, { fontSize: logoFontSize, letterSpacing: isCompact ? 2 : 3 }]}>
-            <Text style={styles.logoVein}>VEIN</Text>
-            <Text style={styles.logoGuard}>GUARD</Text>
-          </Text>
-          <Text style={[styles.logoSubtitle, { letterSpacing: subtitleSpacing, fontSize: Math.max(9, Math.round((isVeryShort ? 10 : 11) * uiScale)), marginBottom: isVeryShort ? 10 : 14 }]}>{t('login.subtitle')}</Text>
-          <View style={styles.mqttBadge}>
-            <View style={styles.mqttDot} />
-            <Text style={[styles.mqttText, { fontSize: Math.max(10, Math.round(11 * uiScale)) }]}>{t('login.mqttBadge')}</Text>
-          </View>
-        </View>
+          <View style={[styles.content, { width: viewportWidth * 0.9 }]}>
+            {/* Logo Unit */}
+            <View style={styles.logoContainer}>
+              <View style={[styles.logoGlow, SHADOWS.cyan]}>
+                <LinearGradient
+                  colors={GRADIENTS.neonCyan}
+                  style={styles.logoIconCircle}
+                >
+                  <Ionicons name="scan" size={32 * uiScale} color={COLORS.white} />
+                </LinearGradient>
+              </View>
+              <Text style={styles.logoTitle}>
+                <Text style={styles.logoVein}>VEIN</Text>
+                <Text style={styles.logoGuard}>GUARD</Text>
+              </Text>
+              <Text style={styles.logoSubtitle}>{t('login.subtitle').toUpperCase()}</Text>
+            </View>
 
-        {/* Form card */}
-        <View style={[styles.formCard, { padding: cardPadding, borderRadius: cardRadius, marginBottom: isVeryShort ? 10 : isShort ? 16 : 20 }]}> 
-          {/* Left accent bar */}
-          <View style={styles.accentBar} />
+            {/* Glassmorphic Login Card */}
+            <BlurView intensity={20} tint="dark" style={styles.glassCard}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>{t('login.accessSystem')}</Text>
+                <View style={styles.statusBadge}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.statusText}>{t('login.mqttBadge')}</Text>
+                </View>
+              </View>
 
-          {/* USERNAME */}
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.fieldLabel, { fontSize: fieldLabelSize }]}>
-                            <Text style={styles.fieldIcon}>👤 </Text>
-                            {t('login.emailLabel')}
-                          </Text>
-            <TextInput
-              style={[styles.input, { paddingVertical: inputVertical, fontSize: inputSize }]}
-              placeholder={t('login.emailPlaceholder')}
-              placeholderTextColor={COLORS.textDim}
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-          </View>
+              {/* INPUT FIELDS */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>{t('login.emailLabel')}</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="person-outline" size={20} color={COLORS.neonCyan} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder={t('login.emailPlaceholder')}
+                    placeholderTextColor={COLORS.textDim}
+                    value={username}
+                    onChangeText={setUsername}
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
 
-          {/* PASSWORD */}
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.fieldLabel, { fontSize: fieldLabelSize }]}>
-              <Text style={styles.fieldIcon}>🔒 </Text>
-              {t('login.passwordLabel')}
-            </Text>
-            <View style={styles.passwordRow}>
-              <TextInput
-                style={[styles.input, styles.passwordInput, { paddingVertical: inputVertical, fontSize: inputSize }]}
-                placeholder={t('login.passwordPlaceholder')}
-                placeholderTextColor={COLORS.textDim}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-              />
-              <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(!showPassword)}>
-                <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁'}</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>{t('login.passwordLabel')}</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="lock-closed-outline" size={20} color={COLORS.neonCyan} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder={t('login.passwordPlaceholder')}
+                    placeholderTextColor={COLORS.textDim}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                    <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={COLORS.textDim} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.forgotBtn}>
+                <Text style={styles.forgotText}>{t('login.forgotPassword')}</Text>
+              </TouchableOpacity>
+
+              {/* MAIN ACTION */}
+              <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin} activeOpacity={0.8}>
+                <LinearGradient
+                  colors={GRADIENTS.neonCyan}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.btnGradient}
+                >
+                  <Text style={styles.btnText}>{t('login.accessSystem').toUpperCase()}</Text>
+                  <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
+                </LinearGradient>
+              </TouchableOpacity>
+            </BlurView>
+
+            {/* Quick Access Divider */}
+            <View style={styles.divider}>
+              <View style={styles.line} />
+              <Text style={styles.dividerText}>{t('login.orQuickAccess').toUpperCase()}</Text>
+              <View style={styles.line} />
+            </View>
+
+            {/* Alternative Methods */}
+            <View style={styles.quickActions}>
+              <TouchableOpacity style={[styles.secondaryBtn, { borderColor: COLORS.neonGreen }]}>
+                <Ionicons name="finger-print" size={22} color={COLORS.neonGreen} />
+                <Text style={[styles.secondaryBtnText, { color: COLORS.neonGreen }]}>{t('login.biometricLogin')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[styles.secondaryBtn, { borderColor: COLORS.neonMagenta }]}>
+                <Ionicons name="scan-outline" size={22} color={COLORS.neonMagenta} />
+                <Text style={[styles.secondaryBtnText, { color: COLORS.neonMagenta }]}>{t('login.veinBtn')}</Text>
               </TouchableOpacity>
             </View>
-          </View>
 
-          {/* ADMIN DOMAIN */}
-          <View
-            style={[
-              styles.domainRow,
-              {
-                borderRadius: Math.round(8 * uiScale),
-              },
-              isNarrow && styles.domainRowCompact,
-            ]}
-          >
-            <View style={styles.domainLeft}>
-              <Text style={styles.domainIcon}>🛡</Text>
-              <Text style={[styles.domainLabel, { fontSize: fieldLabelSize }]}>{t('login.adminDomain')}</Text>
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>SECURE ACCESS PROTOCOL v2.4</Text>
+              <View style={styles.footerOrbs}>
+                <View style={[styles.miniOrb, { backgroundColor: COLORS.neonCyan }]} />
+                <View style={[styles.miniOrb, { backgroundColor: COLORS.neonPurple }]} />
+                <View style={[styles.miniOrb, { backgroundColor: COLORS.neonGreen }]} />
+              </View>
             </View>
-            <TouchableOpacity style={[styles.domainDropdown, isNarrow && styles.domainDropdownCompact]}>
-              <Text style={[styles.domainDropdownText, { fontSize: Math.max(11, Math.round(12 * uiScale)) }]}>{domain}  ▼</Text>
-            </TouchableOpacity>
           </View>
-
-          {/* FORGOT PASSWORD */}
-          <TouchableOpacity style={styles.forgotRow}>
-            <Text style={[styles.forgotText, { fontSize: Math.max(11, Math.round(12 * uiScale)) }]}>🔑 {t('login.forgotPassword')}</Text>
-          </TouchableOpacity>
-
-          {/* ACCESS SYSTEM BUTTON */}
-          <TouchableOpacity style={styles.accessBtn} onPress={handleLogin}>
-            <View style={[styles.accessBtnGradient, { paddingVertical: actionBtnVertical }]}> 
-              <Text style={[styles.accessBtnText, { fontSize: primaryBtnTextSize, letterSpacing: isNarrow ? 1.2 : 2 }]}>{t('login.accessSystem')}</Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Divider */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>{t('login.orQuickAccess')}</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* BIOMETRIC LOGIN */}
-          <TouchableOpacity style={[styles.biometricBtn, { paddingVertical: actionBtnVertical }]}> 
-            <Text style={[styles.biometricBtnText, { fontSize: secondaryBtnTextSize, letterSpacing: isNarrow ? 1.2 : 2 }]}>{t('login.biometricLogin')}</Text>
-          </TouchableOpacity>
-
-          {/* VEIN SCAN ACCESS */}
-          <TouchableOpacity style={[styles.veinBtn, { paddingVertical: actionBtnVertical }]}> 
-            <Text style={[styles.veinBtnText, { fontSize: secondaryBtnTextSize, letterSpacing: isNarrow ? 1.2 : 2 }]}>{t('login.veinBtn')}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <View style={styles.footerBadges}>
-            <Text style={styles.footerBadge}>⬡ ESP32</Text>
-            <Text style={styles.footerSep}>|</Text>
-            <Text style={styles.footerBadge}>📶 MQTT</Text>
-            <Text style={styles.footerSep}>|</Text>
-            <Text style={styles.footerBadge}>🛡 AES-256</Text>
-          </View>
-          <Text style={styles.footerCopy}>{t('login.footer')}</Text>
-        </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -252,122 +195,106 @@ export default function Login({ navigation }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },
   keyboardWrap: { flex: 1 },
-  scroll: { flexGrow: 1, alignItems: 'center' },
-  contentWrap: { width: '100%' },
+  scroll: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
+  content: { alignItems: 'center' },
+  
+  orb: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    opacity: 0.15,
+    blurRadius: 100,
+  },
 
-  // Corner decorations
-  corner: { position: 'absolute', borderColor: COLORS.teal, zIndex: 10 },
-  cornerTL: { top: 12, left: 12, borderTopWidth: 2, borderLeftWidth: 2 },
-  cornerTR: { top: 12, right: 12, borderTopWidth: 2, borderRightWidth: 2 },
-  cornerBL: { bottom: 12, left: 12, borderBottomWidth: 2, borderLeftWidth: 2 },
-  cornerBR: { bottom: 12, right: 12, borderBottomWidth: 2, borderRightWidth: 2 },
-
-  // Logo
-  logoSection: { alignItems: 'center', marginBottom: 24 },
+  logoContainer: { alignItems: 'center', marginBottom: 40 },
+  logoGlow: { marginBottom: 20 },
   logoIconCircle: {
-    width: 64, height: 64, borderRadius: 32,
-    borderWidth: 2, borderColor: COLORS.teal,
-    backgroundColor: '#0a1e35',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 10,
-    shadowColor: COLORS.teal, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 10,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  logoIconText: { color: COLORS.teal, fontSize: 28 },
-  logoText: { fontSize: 30, fontWeight: '900', letterSpacing: 3, marginBottom: 4 },
+  logoTitle: { fontSize: 32, fontWeight: '900', letterSpacing: 4, marginBottom: 5 },
   logoVein: { color: COLORS.white },
-  logoGuard: { color: COLORS.teal },
-  logoSubtitle: { color: COLORS.textDim, fontSize: 11, letterSpacing: 4, marginBottom: 14 },
-  mqttBadge: {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: COLORS.green,
-    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4,
-  },
-  mqttDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.green, marginRight: 6 },
-  mqttText: { color: COLORS.green, fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  logoGuard: { color: COLORS.neonCyan },
+  logoSubtitle: { color: COLORS.textSecondary, fontSize: 10, letterSpacing: 6 },
 
-  // Form card
-  formCard: {
-    backgroundColor: COLORS.cardBg,
+  glassCard: {
+    width: '100%',
+    padding: 24,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    overflow: 'hidden',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 25,
+  },
+  cardTitle: { color: COLORS.white, fontSize: 18, fontWeight: '800' },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(57, 255, 20, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    padding: 20,
-    marginBottom: 24,
-    position: 'relative',
+    borderColor: 'rgba(57, 255, 20, 0.3)',
   },
-  accentBar: {
-    position: 'absolute', left: 0, top: 16, bottom: 16,
-    width: 3, backgroundColor: COLORS.teal, borderRadius: 2,
-  },
+  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.neonGreen, marginRight: 6 },
+  statusText: { color: COLORS.neonGreen, fontSize: 10, fontWeight: '700' },
 
-  fieldGroup: { marginBottom: 12 },
-  fieldLabel: { color: COLORS.teal, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, marginBottom: 8 },
-  fieldIcon: { color: COLORS.teal },
-  input: {
-    backgroundColor: COLORS.inputBg,
-    borderWidth: 1, borderColor: COLORS.borderBlue,
-    borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12,
-    color: COLORS.white, fontSize: 14,
+  inputGroup: { marginBottom: 20 },
+  label: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 10, marginLeft: 5 },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  passwordRow: { position: 'relative' },
-  passwordInput: { paddingRight: 46 },
-  eyeBtn: { position: 'absolute', right: 12, top: 12 },
-  eyeIcon: { fontSize: 18 },
+  inputIcon: { marginRight: 12 },
+  input: { flex: 1, paddingVertical: 15, color: COLORS.white, fontSize: 15 },
 
-  domainRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.borderBlue,
-    borderRadius: 8, padding: 12, marginBottom: 12,
-  },
-  domainRowCompact: {
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  domainLeft: { flexDirection: 'row', alignItems: 'center' },
-  domainIcon: { fontSize: 16, marginRight: 8 },
-  domainLabel: { color: COLORS.amber, fontSize: 11, fontWeight: '700', letterSpacing: 1, flexShrink: 1 },
-  domainDropdown: {
-    borderWidth: 1, borderColor: COLORS.amber,
-    borderRadius: 6, paddingHorizontal: 12, paddingVertical: 6,
-  },
-  domainDropdownCompact: {
-    alignSelf: 'flex-end',
-  },
-  domainDropdownText: { color: COLORS.amber, fontSize: 12, fontWeight: '600' },
+  forgotBtn: { alignSelf: 'flex-end', marginBottom: 25 },
+  forgotText: { color: COLORS.neonCyan, fontSize: 13, fontWeight: '500' },
 
-  forgotRow: { alignItems: 'flex-end', marginBottom: 14 },
-  forgotText: { color: COLORS.teal, fontSize: 12 },
-
-  accessBtn: { borderRadius: 8, overflow: 'hidden', marginBottom: 14 },
-  accessBtnGradient: {
-    paddingVertical: 16, alignItems: 'center',
-    backgroundColor: '#7000cc',
-    borderWidth: 0,
+  primaryBtn: { borderRadius: 16, overflow: 'hidden' },
+  btnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    gap: 10,
   },
-  accessBtnText: { color: COLORS.white, fontSize: 14, fontWeight: '800', letterSpacing: 2 },
+  btnText: { color: COLORS.white, fontSize: 15, fontWeight: '900', letterSpacing: 2 },
 
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.borderBlue },
-  dividerText: { color: COLORS.textDim, fontSize: 10, marginHorizontal: 10, letterSpacing: 1 },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 35, width: '100%' },
+  line: { flex: 1, height: 1, backgroundColor: 'rgba(255, 255, 255, 0.1)' },
+  dividerText: { color: COLORS.textDim, fontSize: 10, marginHorizontal: 15, letterSpacing: 2, fontWeight: '700' },
 
-  biometricBtn: {
-    borderWidth: 1.5, borderColor: COLORS.green,
-    borderRadius: 8, paddingVertical: 14, alignItems: 'center', marginBottom: 10,
+  quickActions: { gap: 15, width: '100%' },
+  secondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
     backgroundColor: 'transparent',
+    gap: 12,
   },
-  biometricBtnText: { color: COLORS.green, fontSize: 13, fontWeight: '700', letterSpacing: 2 },
+  secondaryBtnText: { fontSize: 14, fontWeight: '800', letterSpacing: 1 },
 
-  veinBtn: {
-    borderWidth: 1.5, borderColor: COLORS.magenta,
-    borderRadius: 8, paddingVertical: 14, alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
-  veinBtnText: { color: COLORS.magenta, fontSize: 13, fontWeight: '700', letterSpacing: 2 },
-
-  // Footer
-  footer: { alignItems: 'center' },
-  footerBadges: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  footerBadge: { color: COLORS.textDim, fontSize: 11 },
-  footerSep: { color: COLORS.textDim, marginHorizontal: 8 },
-  footerCopy: { color: COLORS.textDim, fontSize: 10 },
+  footer: { marginTop: 40, alignItems: 'center' },
+  footerText: { color: COLORS.textDim, fontSize: 10, letterSpacing: 2, marginBottom: 15 },
+  footerOrbs: { flexDirection: 'row', gap: 8 },
+  miniOrb: { width: 6, height: 6, borderRadius: 3, opacity: 0.5 },
 });

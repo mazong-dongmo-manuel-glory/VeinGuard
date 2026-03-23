@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   View,
@@ -8,161 +8,199 @@ import {
   TouchableOpacity,
   TextInput,
   StatusBar,
-  Dimensions,
+  Animated,
+  Platform,
 } from 'react-native';
-
-const { width } = Dimensions.get('window');
-
-const COLORS = {
-  bg: '#080e1a',
-  cardBg: '#0d1b2e',
-  cardBorder: '#1a3a5c',
-  green: '#00ff88',
-  teal: '#00e5ff',
-  amber: '#e6a020',
-  red: '#ff3d5a',
-  yellow: '#f0e020',
-  text: '#b8cfe0',
-  textDim: '#4a6a8a',
-  white: '#ffffff',
-  headerBg: '#0a1525',
-  inputBg: '#091525',
-  greenDark: '#002a1a',
-  redDark: '#2a0010',
-  amberDark: '#2a1500',
-};
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { COLORS, GRADIENTS } from '../theme';
 
 function QualityBar({ label, value, color }) {
+  const animWidth = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(animWidth, {
+      toValue: value,
+      duration: 1000,
+      useNativeDriver: false,
+    }).start();
+  }, [value]);
+
   return (
     <View style={styles.qualityRow}>
-      <Text style={styles.qualityLabel}>{label}</Text>
-      <Text style={[styles.qualityVal, { color }]}>{value}%</Text>
+      <View style={styles.qualityLabelRow}>
+        <Text style={styles.qualityLabel}>{label.toUpperCase()}</Text>
+        <Text style={[styles.qualityVal, { color }]}>{value}%</Text>
+      </View>
       <View style={styles.qualityBg}>
-        <View style={[styles.qualityFill, { width: `${value}%`, backgroundColor: color }]} />
+        <Animated.View 
+          style={[
+            styles.qualityFill, 
+            { 
+              width: animWidth.interpolate({
+                inputRange: [0, 100],
+                outputRange: ['0%', '100%']
+              }),
+              backgroundColor: color 
+            }
+          ]} 
+        />
       </View>
     </View>
   );
 }
 
-export default function VeinScanBiometrics() {
+import { useMqttStore } from '../store/mqttStore';
+import { Alert } from 'react-native';
+
+export default function VeinScanBiometrics({ navigation }) {
   const { t } = useTranslation();
   const [userId, setUserId] = useState('');
   const [scanning, setScanning] = useState(false);
+  const scanLineAnim = useRef(new Animated.Value(0)).current;
+
+  const isConnected = useMqttStore((state) => state.isConnected);
+  const client = useMqttStore((state) => state.client);
+
+  useEffect(() => {
+    if (scanning) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(scanLineAnim, { toValue: 1, duration: 2000, useNativeDriver: true }),
+          Animated.timing(scanLineAnim, { toValue: 0, duration: 2000, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      scanLineAnim.setValue(0);
+    }
+  }, [scanning]);
+
+  const handleScanToggle = () => {
+    if (!isConnected) {
+        Alert.alert("System Offline", "Unable to communicate with security gateway.");
+        return;
+    }
+
+    if (!scanning) {
+        // Trigger scan on hardware
+        client.publish('veinguard/cmd/scan', JSON.stringify({ 
+            client_id: 'MOBILE_APP',
+            user_id: userId || 'anonymous'
+        }));
+        setScanning(true);
+        Alert.alert("Hardware Triggered", "The biometric sensor is now live. Please place your hand on the scanner.");
+    } else {
+        setScanning(false);
+    }
+  };
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
-      {/* Header */}
+      <StatusBar barStyle="light-content" />
+      <LinearGradient colors={GRADIENTS.primary} style={StyleSheet.absoluteFill} />
+
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.logoVein}>VEIN</Text>
-          <Text style={styles.logoGuard}>GUARD</Text>
-          <View style={styles.mqttBadge}>
-            <View style={styles.mqttDot} />
-            <Text style={styles.mqttText}>{t('login.mqttBadge')}</Text>
-          </View>
-        </View>
-        <View style={styles.headerRight}>
-          <Text style={styles.headerTime}>12:32:00   UTC+0</Text>
-          <View style={styles.avatarCircle}><Text>👤</Text></View>
-          <Text style={styles.adminText}>{t('common.admin')}</Text>
-        </View>
-      </View>
-      {/* Dropdown */}
-      <View style={styles.dropdown}>
-        <Text style={styles.dropdownText}>{t('veinScan.dropdownLabel')}</Text>
-        <Text style={styles.dropdownArrow}>▼</Text>
-      </View>
-      {/* MQTT scroll ticker */}
-      <View style={styles.ticker}>
-        <Text style={styles.tickerText}>MQTT: Publishing scan request...   Topic: veinGuard-scan/request   Device: ESP32-21</Text>
+        <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.white} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{t('veinScan.title')}</Text>
+        <TouchableOpacity style={[styles.statusBadge, { backgroundColor: isConnected ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 61, 90, 0.1)' }]}>
+          <View style={[styles.statusDot, { backgroundColor: isConnected ? COLORS.neonGreen : COLORS.neonRed }]} />
+          <Text style={[styles.statusText, { color: isConnected ? COLORS.neonGreen : COLORS.neonRed }]}>{isConnected ? 'ACTIVE' : 'OFFLINE'}</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Title */}
-        <View style={styles.titleRow}>
-          <View>
-            <Text style={styles.pageTitle}>{t('veinScan.title')}</Text>
-            <Text style={styles.pageSubtitle}>{t('veinScan.subtitle')}</Text>
-          </View>
-          <View style={styles.scannerStatus}>
-            <Text style={styles.scannerStatusText}>{t('veinScan.scannerStatus')}</Text>
-            <Text style={[styles.scannerStatusValue, { color: COLORS.green }]}>{t('veinScan.active')}</Text>
-          </View>
+        <View style={styles.welcomeSection}>
+          <Text style={styles.subtitle}>{t('veinScan.subtitle')}</Text>
         </View>
 
-        {/* Camera Preview */}
-        <View style={styles.card}>
-          <View style={styles.cameraHeader}>
-            <Text style={styles.cameraTitle}>{t('veinScan.cameraPreview')}</Text>
-            <View style={styles.recBadge}>
-              <View style={styles.recDot} />
-              <Text style={styles.recText}>REC</Text>
+        {/* Holographic Scanner */}
+        <BlurView intensity={20} tint="dark" style={styles.scannerCard}>
+          <View style={styles.scannerHeader}>
+            <View style={styles.recGroup}>
+              <View style={[styles.recDot, !scanning && { backgroundColor: COLORS.textDim }]} />
+              <Text style={[styles.recText, !scanning && { color: COLORS.textDim }]}>{scanning ? 'LIVE FEED' : 'STANDBY'}</Text>
             </View>
+            <Text style={styles.scannerId}>SENSOR: VS-ALPHA-01</Text>
           </View>
-          <View style={styles.cameraBox}>
-            {/* Scan overlay */}
-            <View style={styles.scanCornerTL} />
-            <View style={styles.scanCornerTR} />
-            <View style={styles.scanCornerBL} />
-            <View style={styles.scanCornerBR} />
-            {/* Circular scanner */}
-            <View style={styles.scanCircle}>
-              <Text style={styles.scanCircleIcon}>👋</Text>
+
+          <View style={styles.scannerFrame}>
+            <View style={styles.cornerTL} />
+            <View style={styles.cornerTR} />
+            <View style={styles.cornerBL} />
+            <View style={styles.cornerBR} />
+            
+            <View style={styles.hologramContainer}>
+              <Ionicons name="hand-left" size={80} color={scanning ? COLORS.neonCyan : 'rgba(255,255,255,0.1)'} />
+              {scanning && (
+                <Animated.View 
+                  style={[
+                    styles.scanLine,
+                    {
+                      transform: [{
+                        translateY: scanLineAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-60, 60]
+                        })
+                      }]
+                    }
+                  ]} 
+                >
+                  <LinearGradient 
+                    colors={['transparent', COLORS.neonCyan, 'transparent']} 
+                    start={{x: 0, y: 0.5}} 
+                    end={{x: 1, y: 0.5}} 
+                    style={styles.scanLineGlow} 
+                  />
+                </Animated.View>
+              )}
             </View>
-            {/* Target reticle */}
+
             <View style={styles.reticle}>
               <View style={styles.reticleH} />
               <View style={styles.reticleV} />
             </View>
+
+            <View style={styles.frameFooter}>
+              <Text style={styles.frameMeta}>COORD: 42.0 // 18.5</Text>
+              <Text style={styles.frameMeta}>IR-GAIN: +12dB</Text>
+            </View>
           </View>
-          <View style={styles.cameraFooter}>
-            <Text style={styles.cameraFooterLeft}>POSITION HAND ABOVE SCANNER{'\n'}FRAME: 1920x1080</Text>
-            <Text style={styles.cameraFooterRight}>IR ACTIVE{'\n'}FPS: 30</Text>
+
+          <View style={styles.scannerActions}>
+            <TouchableOpacity 
+              style={[styles.scanBtn, scanning ? styles.scanBtnActive : null]} 
+              onPress={handleScanToggle}
+            >
+              <LinearGradient 
+                colors={scanning ? [COLORS.neonRed, '#7a2020'] : GRADIENTS.neonCyan} 
+                style={styles.scanBtnInner}
+              >
+                <Ionicons name={scanning ? "stop" : "play"} size={20} color={COLORS.white} />
+                <Text style={styles.scanBtnText}>
+                  {scanning ? t('veinScan.stopScan').toUpperCase() : t('veinScan.startScan').toUpperCase()}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
+        </BlurView>
+
+        {/* Intelligence & Quality */}
+        <View style={styles.row}>
+          <BlurView intensity={10} style={[styles.infoCard, { flex: 1 }]}>
+            <Text style={styles.infoTitle}>{t('veinScan.scanQuality').toUpperCase()}</Text>
+            <QualityBar label={t('veinScan.signalStrength')} value={87} color={COLORS.neonGreen} />
+            <QualityBar label={t('veinScan.patternClarity')} value={64} color={COLORS.neonAmber} />
+            <QualityBar label={t('veinScan.alignment')} value={92} color={COLORS.neonCyan} />
+          </BlurView>
         </View>
 
-        {/* Scan Quality */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t('veinScan.scanQuality')}</Text>
-          <QualityBar label={t('veinScan.signalStrength')} value={87} color={COLORS.green} />
-          <QualityBar label={t('veinScan.patternClarity')} value={64} color={COLORS.amber} />
-          <QualityBar label={t('veinScan.alignment')} value={92} color={COLORS.teal} />
-        </View>
-
-        {/* Scan Controls */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t('veinScan.scanControls')}</Text>
-          <TouchableOpacity
-            style={[styles.ctrlBtn, styles.startBtn]}
-            onPress={() => setScanning(true)}
-          >
-            <Text style={styles.ctrlBtnText}>{t('veinScan.startScan')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.ctrlBtn, styles.stopBtn]}
-            onPress={() => setScanning(false)}
-          >
-            <Text style={[styles.ctrlBtnText, { color: COLORS.red }]}>{t('veinScan.stopScan')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.ctrlBtn, styles.irBtn]}>
-            <Text style={[styles.ctrlBtnText, { color: COLORS.amber }]}>{t('veinScan.toggleIr')}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* MQTT Status */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t('veinScan.mqttStatus')}</Text>
-          <View style={styles.mqttRow}><Text style={styles.mqttLabel}>{t('veinScan.connection')}</Text><Text style={[styles.mqttVal, { color: COLORS.green }]}>ONLINE</Text></View>
-          <View style={styles.mqttRow}><Text style={styles.mqttLabel}>{t('veinScan.lastPublish')}</Text><Text style={styles.mqttVal}>2s ago</Text></View>
-          <View style={styles.mqttRow}><Text style={styles.mqttLabel}>{t('veinScan.topic')}</Text><Text style={styles.mqttVal}>scan/request</Text></View>
-        </View>
-
-        {/* Manual ID Entry */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t('veinScan.manualIdEntry')}</Text>
-          <Text style={styles.manualLabel}>{t('veinScan.userId')}</Text>
-          <View style={styles.manualRow}>
+        {/* Manual Access */}
+        <BlurView intensity={10} style={styles.manualCard}>
+          <Text style={styles.infoTitle}>{t('veinScan.manualIdEntry').toUpperCase()}</Text>
+          <View style={styles.inputRow}>
             <TextInput
               style={styles.manualInput}
               placeholder={t('veinScan.userIdPlaceholder')}
@@ -171,21 +209,23 @@ export default function VeinScanBiometrics() {
               onChangeText={setUserId}
             />
             <TouchableOpacity style={styles.testBtn}>
-              <Text style={styles.testBtnText}>{t('veinScan.testAccess')}</Text>
+              <LinearGradient colors={['rgba(255, 216, 78, 0.2)', 'rgba(255, 216, 78, 0.05)']} style={styles.testBtnInner}>
+                <Text style={styles.testBtnText}>{t('veinScan.testAccess').toUpperCase()}</Text>
+              </LinearGradient>
             </TouchableOpacity>
+          </View>
+        </BlurView>
+
+        {/* Security Notice */}
+        <View style={styles.privacyCard}>
+          <Ionicons name="shield-checkmark" size={24} color={COLORS.neonGreen} />
+          <View style={styles.privacyTextContent}>
+            <Text style={styles.privacyTitle}>{t('veinScan.privacyTitle').toUpperCase()}</Text>
+            <Text style={styles.privacyDesc}>{t('veinScan.privacyText')}</Text>
           </View>
         </View>
 
-        {/* Privacy notice */}
-        <View style={styles.privacyCard}>
-          <Text style={styles.privacyIcon}>🔒</Text>
-          <Text style={styles.privacyText}>
-            <Text style={styles.privacyBold}>{t('veinScan.privacyTitle')}{'\n'}</Text>
-            {t('veinScan.privacyText')}
-          </Text>
-        </View>
-
-        <View style={{ height: 32 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
@@ -194,89 +234,88 @@ export default function VeinScanBiometrics() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: COLORS.headerBg, paddingHorizontal: 16, paddingTop: 44, paddingBottom: 10,
-    borderBottomWidth: 1, borderBottomColor: COLORS.cardBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  logoVein: { color: '#fff', fontWeight: '900', fontSize: 17 },
-  logoGuard: { color: COLORS.teal, fontWeight: '900', fontSize: 17, marginRight: 10 },
-  mqttBadge: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.green, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
-  mqttDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: COLORS.green, marginRight: 4 },
-  mqttText: { color: COLORS.green, fontSize: 9, fontWeight: '700' },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerTime: { color: COLORS.textDim, fontSize: 10 },
-  avatarCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.cardBorder, alignItems: 'center', justifyContent: 'center' },
-  adminText: { color: COLORS.text, fontSize: 11 },
-  dropdown: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: 14, marginTop: 8, marginBottom: 0, padding: 10,
-    backgroundColor: COLORS.cardBg, borderRadius: 8, borderWidth: 1, borderColor: COLORS.cardBorder,
+  backBtn: { width: 40, height: 40, justifyContent: 'center' },
+  headerTitle: { color: COLORS.white, fontSize: 18, fontWeight: '800', letterSpacing: 1 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(57, 255, 20, 0.1)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(57, 255, 20, 0.2)' },
+  statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
+  statusText: { color: COLORS.neonGreen, fontSize: 10, fontWeight: '900' },
+
+  scroll: { flex: 1, paddingHorizontal: 20 },
+  welcomeSection: { marginBottom: 20 },
+  subtitle: { color: COLORS.textSecondary, fontSize: 14 },
+
+  scannerCard: {
+    borderRadius: 30,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    marginBottom: 20,
+    overflow: 'hidden',
   },
-  dropdownText: { color: COLORS.teal, fontSize: 12 },
-  dropdownArrow: { color: COLORS.textDim, fontSize: 10 },
-  ticker: {
-    backgroundColor: '#050d18', paddingHorizontal: 14, paddingVertical: 6,
-    borderBottomWidth: 1, borderBottomColor: COLORS.cardBorder,
+  scannerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  recGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  recDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.neonRed },
+  recText: { color: COLORS.neonRed, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  scannerId: { color: COLORS.textDim, fontSize: 9, fontWeight: '700' },
+
+  scannerFrame: {
+    height: 240,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
   },
-  tickerText: { color: COLORS.green, fontSize: 10 },
-  scroll: { flex: 1, paddingHorizontal: 14 },
-  titleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginTop: 12, marginBottom: 12 },
-  pageTitle: { color: COLORS.white, fontSize: 18, fontWeight: '900', letterSpacing: 1, flex: 1 },
-  pageSubtitle: { color: COLORS.textDim, fontSize: 10, marginTop: 3 },
-  scannerStatus: { alignItems: 'flex-end', marginLeft: 8 },
-  scannerStatusText: { color: COLORS.textDim, fontSize: 9, letterSpacing: 1 },
-  scannerStatusValue: { fontSize: 12, fontWeight: '800', letterSpacing: 1, marginTop: 2 },
-  card: { backgroundColor: COLORS.cardBg, borderRadius: 10, borderWidth: 1, borderColor: COLORS.cardBorder, padding: 14, marginBottom: 12 },
-  sectionTitle: { color: COLORS.teal, fontSize: 11, fontWeight: '800', letterSpacing: 2, marginBottom: 12 },
-  cameraHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  cameraTitle: { color: COLORS.teal, fontSize: 11, fontWeight: '800', letterSpacing: 2 },
-  recBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  recDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.red },
-  recText: { color: COLORS.red, fontSize: 10, fontWeight: '700' },
-  cameraBox: {
-    height: 200, backgroundColor: '#050d18',
-    borderRadius: 8, borderWidth: 1, borderColor: COLORS.teal,
-    position: 'relative', alignItems: 'center', justifyContent: 'center',
-    overflow: 'hidden', marginBottom: 8,
-  },
-  scanCornerTL: { position: 'absolute', top: 8, left: 8, width: 20, height: 20, borderTopWidth: 2, borderLeftWidth: 2, borderColor: COLORS.teal },
-  scanCornerTR: { position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderTopWidth: 2, borderRightWidth: 2, borderColor: COLORS.teal },
-  scanCornerBL: { position: 'absolute', bottom: 8, left: 8, width: 20, height: 20, borderBottomWidth: 2, borderLeftWidth: 2, borderColor: COLORS.teal },
-  scanCornerBR: { position: 'absolute', bottom: 8, right: 8, width: 20, height: 20, borderBottomWidth: 2, borderRightWidth: 2, borderColor: COLORS.teal },
-  scanCircle: {
-    width: 100, height: 100, borderRadius: 50,
-    borderWidth: 2, borderColor: COLORS.teal,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#0a1e35',
-  },
-  scanCircleIcon: { fontSize: 40 },
-  reticle: { position: 'absolute', width: 30, height: 30, top: 80, left: 100 },
-  reticleH: { position: 'absolute', top: 15, left: 0, right: 0, height: 1, backgroundColor: COLORS.teal },
-  reticleV: { position: 'absolute', left: 15, top: 0, bottom: 0, width: 1, backgroundColor: COLORS.teal },
-  cameraFooter: { flexDirection: 'row', justifyContent: 'space-between' },
-  cameraFooterLeft: { color: COLORS.textDim, fontSize: 9, lineHeight: 14 },
-  cameraFooterRight: { color: COLORS.green, fontSize: 9, textAlign: 'right', lineHeight: 14 },
-  qualityRow: { marginBottom: 10 },
-  qualityLabel: { color: COLORS.text, fontSize: 11, marginBottom: 4 },
-  qualityVal: { fontSize: 10, fontWeight: '700', textAlign: 'right', marginBottom: 2 },
-  qualityBg: { height: 8, backgroundColor: '#050d18', borderRadius: 4, overflow: 'hidden' },
-  qualityFill: { height: '100%', borderRadius: 4 },
-  ctrlBtn: { borderRadius: 8, paddingVertical: 14, alignItems: 'center', marginBottom: 10, borderWidth: 1 },
-  startBtn: { backgroundColor: COLORS.greenDark, borderColor: COLORS.green },
-  stopBtn: { backgroundColor: COLORS.redDark, borderColor: COLORS.red },
-  irBtn: { backgroundColor: COLORS.amberDark, borderColor: COLORS.amber },
-  ctrlBtnText: { color: COLORS.green, fontSize: 13, fontWeight: '800', letterSpacing: 2 },
-  mqttRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: COLORS.cardBorder },
-  mqttLabel: { color: COLORS.textDim, fontSize: 12 },
-  mqttVal: { color: COLORS.white, fontSize: 12, fontWeight: '600' },
-  manualLabel: { color: COLORS.textDim, fontSize: 11, marginBottom: 8 },
-  manualRow: { flexDirection: 'row', gap: 8 },
-  manualInput: { flex: 1, backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.cardBorder, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 10, color: COLORS.white, fontSize: 12 },
-  testBtn: { backgroundColor: COLORS.amberDark, borderWidth: 1, borderColor: COLORS.amber, borderRadius: 6, paddingHorizontal: 14, justifyContent: 'center' },
-  testBtnText: { color: COLORS.amber, fontSize: 11, fontWeight: '800' },
-  privacyCard: { flexDirection: 'row', backgroundColor: '#080f1e', borderRadius: 8, borderWidth: 1, borderColor: COLORS.cardBorder, padding: 12, marginBottom: 12 },
-  privacyIcon: { fontSize: 16, marginRight: 10, marginTop: 2 },
-  privacyText: { flex: 1, color: COLORS.textDim, fontSize: 10, lineHeight: 16 },
-  privacyBold: { color: COLORS.text, fontWeight: '700' },
+  cornerTL: { position: 'absolute', top: 15, left: 15, width: 25, height: 25, borderTopWidth: 2, borderLeftWidth: 2, borderColor: COLORS.neonCyan },
+  cornerTR: { position: 'absolute', top: 15, right: 15, width: 25, height: 25, borderTopWidth: 2, borderRightWidth: 2, borderColor: COLORS.neonCyan },
+  cornerBL: { position: 'absolute', bottom: 15, left: 15, width: 25, height: 25, borderBottomWidth: 2, borderLeftWidth: 2, borderColor: COLORS.neonCyan },
+  cornerBR: { position: 'absolute', bottom: 15, right: 15, width: 25, height: 25, borderBottomWidth: 2, borderRightWidth: 2, borderColor: COLORS.neonCyan },
+  
+  hologramContainer: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(0, 242, 255, 0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0, 242, 255, 0.1)' },
+  scanLine: { position: 'absolute', width: '100%', height: 2 },
+  scanLineGlow: { flex: 1 },
+
+  reticle: { position: 'absolute', width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  reticleH: { width: '100%', height: 1, backgroundColor: 'rgba(255, 255, 255, 0.1)' },
+  reticleV: { height: '100%', width: 1, backgroundColor: 'rgba(255, 255, 255, 0.1)' },
+
+  frameFooter: { position: 'absolute', bottom: 15, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20 },
+  frameMeta: { color: 'rgba(255, 255, 255, 0.2)', fontSize: 8, fontWeight: '700', letterSpacing: 1 },
+
+  scannerActions: { marginTop: 20 },
+  scanBtn: { borderRadius: 18, overflow: 'hidden' },
+  scanBtnInner: { paddingVertical: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
+  scanBtnText: { color: COLORS.white, fontWeight: '900', letterSpacing: 2, fontSize: 14 },
+
+  infoCard: { borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)', marginBottom: 20 },
+  infoTitle: { color: COLORS.textDim, fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 20 },
+
+  qualityRow: { marginBottom: 15 },
+  qualityLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  qualityLabel: { color: COLORS.textSecondary, fontSize: 10, fontWeight: '700' },
+  qualityVal: { fontSize: 11, fontWeight: '800' },
+  qualityBg: { height: 6, backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: 3, overflow: 'hidden' },
+  qualityFill: { height: '100%', borderRadius: 3 },
+
+  manualCard: { borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)', marginBottom: 20 },
+  inputRow: { flexDirection: 'row', gap: 10 },
+  manualInput: { flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', color: COLORS.white, paddingHorizontal: 15, paddingVertical: 12, fontSize: 14 },
+  testBtn: { borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255, 216, 78, 0.2)' },
+  testBtnInner: { paddingHorizontal: 15, justifyContent: 'center', flex: 1 },
+  testBtnText: { color: COLORS.neonAmber, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+
+  privacyCard: { flexDirection: 'row', backgroundColor: 'rgba(57, 255, 20, 0.03)', borderRadius: 20, padding: 15, gap: 15, borderWidth: 1, borderColor: 'rgba(57, 255, 20, 0.1)' },
+  privacyTextContent: { flex: 1 },
+  privacyTitle: { color: COLORS.neonGreen, fontSize: 11, fontWeight: '900', letterSpacing: 1, marginBottom: 4 },
+  privacyDesc: { color: COLORS.textDim, fontSize: 12, lineHeight: 18 },
 });

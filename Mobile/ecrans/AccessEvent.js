@@ -7,51 +7,37 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { COLORS, GRADIENTS } from '../theme';
 
-const COLORS = {
-  bg: '#080e1a',
-  cardBg: '#0d1b2e',
-  cardBorder: '#1a3a5c',
-  green: '#00ff88',
-  teal: '#00e5ff',
-  red: '#ff3d5a',
-  magenta: '#d400ff',
-  text: '#b8cfe0',
-  textDim: '#4a6a8a',
-  white: '#ffffff',
-  headerBg: '#0a1525',
-  codeBg: '#05080f',
-};
-
-function ActionButton({ title, color, bg }) {
+function ActionButton({ icon, title, color, bg }) {
   return (
-    <TouchableOpacity style={[styles.actionBtn, { borderColor: color, backgroundColor: bg }]}>
-      <Text style={[styles.actionBtnText, { color }]}>{title}</Text>
+    <TouchableOpacity style={[styles.actionBtn, { borderColor: `${color}40`, backgroundColor: `${color}10` }]}>
+      <Ionicons name={icon} size={20} color={color} style={{ marginBottom: 6 }} />
+      <Text style={[styles.actionBtnText, { color }]}>{title.toUpperCase()}</Text>
     </TouchableOpacity>
   );
 }
 
 function TimelineItem({ icon, title, desc, meta, time, dotColor, isLast = false }) {
   return (
-    <View style={[styles.timelineItem, isLast && styles.timelineItemLast]}>
-      <View
-        style={[
-          styles.timelineIconWrap,
-          {
-            borderColor: dotColor,
-            shadowColor: dotColor,
-          },
-        ]}
-      >
-        <Text style={styles.timelineIcon}>{icon}</Text>
+    <View style={styles.timelineItem}>
+      <View style={styles.timelineLeft}>
+        <View style={[styles.timelineDot, { backgroundColor: dotColor, shadowColor: dotColor }]} />
+        {!isLast && <View style={styles.timelineLine} />}
       </View>
-      <View style={styles.timelineMain}>
-        <Text style={styles.timelineTitle}>{title}</Text>
+      <View style={styles.timelineContent}>
+        <View style={styles.timelineHeader}>
+          <Text style={styles.timelineTitle}>{title.toUpperCase()}</Text>
+          <Text style={styles.timelineTime}>{time}</Text>
+        </View>
         <Text style={styles.timelineDesc}>{desc}</Text>
         <Text style={[styles.timelineMeta, { color: dotColor }]}>{meta}</Text>
       </View>
-      <Text style={styles.timelineTime}>{time}</Text>
     </View>
   );
 }
@@ -59,7 +45,7 @@ function TimelineItem({ icon, title, desc, meta, time, dotColor, isLast = false 
 function TelemetryRow({ label, value, valueColor = COLORS.white }) {
   return (
     <View style={styles.telemetryRow}>
-      <Text style={styles.telemetryLabel}>{label}</Text>
+      <Text style={styles.telemetryLabel}>{label.toUpperCase()}</Text>
       <Text style={[styles.telemetryValue, { color: valueColor }]}>{value}</Text>
     </View>
   );
@@ -67,13 +53,13 @@ function TelemetryRow({ label, value, valueColor = COLORS.white }) {
 
 function CodeBlock({ title, topic, payload }) {
   return (
-    <View style={styles.codeCard}>
-      <Text style={styles.codeTitle}>{title}</Text>
+    <BlurView intensity={5} style={styles.codeCard}>
+      <Text style={styles.codeTitle}>{title.toUpperCase()}</Text>
       <Text style={styles.codeTopic}>{topic}</Text>
       <View style={styles.codeBox}>
         <Text style={styles.codeText}>{payload}</Text>
       </View>
-    </View>
+    </BlurView>
   );
 }
 
@@ -89,84 +75,59 @@ export default function AccessEvent({ navigation, route }) {
 
   const statusColor =
     eventStatus === 'GRANTED'
-      ? COLORS.green
+      ? COLORS.neonGreen
       : eventStatus === 'DENIED'
-        ? COLORS.red
-        : COLORS.magenta;
+        ? COLORS.neonRed
+        : COLORS.neonAmber;
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" />
+      <LinearGradient colors={GRADIENTS.primary} style={StyleSheet.absoluteFill} />
 
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.logoVein}>VEIN</Text>
-          <Text style={styles.logoGuard}>GUARD</Text>
-          <View style={styles.mqttBadge}>
-            <View style={styles.mqttDot} />
-            <Text style={styles.mqttText}>MQTT ONLINE</Text>
-          </View>
-        </View>
-        <View style={styles.headerRight}>
-          <Text style={styles.headerTime}>12:25:20   UTC+2</Text>
-          <View style={styles.avatarCircle}><Text style={styles.avatarEmoji}>👤</Text></View>
-          <Text style={styles.adminText}>Admin</Text>
-        </View>
+        <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={24} color={COLORS.white} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>EVENT LOG</Text>
+        <View style={styles.spacer} />
       </View>
 
-      <View style={styles.dropdown}>
-        <Text style={styles.dropdownText}>Access History (Detailed Log)</Text>
-        <Text style={styles.dropdownArrow}>▼</Text>
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.topNavRow}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation?.goBack()}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.breadcrumb}>Access History  {'>'}  <Text style={styles.breadcrumbCurrent}>Event Details</Text></Text>
-        </View>
-
-        <View style={styles.titleWrap}>
-          <Text style={styles.pageTitle}>EVENT{"\n"}DETAILS</Text>
-          <Text style={styles.pageSub}>Event ID: {eventId} · {eventName} · {eventTime} · Score: {eventScore}</Text>
-          <View style={styles.actionsWrap}>
-            <ActionButton title="⟳ RE-RUN DIAGNOSTICS" color={COLORS.teal} bg="#00374955" />
-            <ActionButton title="⚑ FLAG AS SUSPICIOUS" color={COLORS.red} bg="#4a001455" />
-            <ActionButton title="⧉ COPY EVENT ID" color={COLORS.magenta} bg="#3f005155" />
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.titleSection}>
+          <Text style={styles.pageTitle}>{eventId}</Text>
+          <View style={[styles.statusBadge, { borderColor: statusColor, backgroundColor: `${statusColor}15` }]}>
+            <Text style={[styles.statusText, { color: statusColor }]}>{eventStatus}</Text>
           </View>
         </View>
 
-        <View style={styles.card}>
+        <View style={styles.actionsRow}>
+          <ActionButton icon="refresh" title="RE-RUN" color={COLORS.neonCyan} />
+          <ActionButton icon="flag" title="FLAG" color={COLORS.neonRed} />
+          <ActionButton icon="copy" title="COPY" color={COLORS.neonPurple} />
+        </View>
+
+        <BlurView intensity={15} tint="dark" style={styles.card}>
           <Text style={styles.cardTitle}>EVENT TIMELINE</Text>
-          <View style={styles.timelineList}>
-            <View style={styles.timelineRail} />
+          <View style={styles.timelineContainer}>
             <TimelineItem
-              icon="▶"
+              icon="play"
               title="Scan Start"
               desc="Biometric sensor activated, vein pattern capture initiated"
               meta="Duration: 280ms"
               time="14:23:42.341"
-              dotColor={COLORS.green}
+              dotColor={COLORS.neonCyan}
             />
             <TimelineItem
-              icon="↑"
+              icon="cloud-upload"
               title="Publish"
               desc="Vein data transmitted via MQTT to authentication server"
               meta="Latency: 127ms"
               time="14:23:44.188"
-              dotColor={COLORS.teal}
+              dotColor={COLORS.neonPurple}
             />
             <TimelineItem
-              icon="●"
+              icon="git-commit"
               title="Decision"
               desc="AI pattern matching completed, confidence score calculated"
               meta={`Processing: 768ms · Confidence: ${eventScore}`}
@@ -174,51 +135,40 @@ export default function AccessEvent({ navigation, route }) {
               dotColor={statusColor}
             />
             <TimelineItem
-              icon="■"
+              icon="power"
               title="Relay Trigger"
               desc="Access granted, door relay activated for 5 seconds"
               meta="Response: 67ms · Status: SUCCESS"
               time="14:23:45.021"
-              dotColor={COLORS.green}
+              dotColor={COLORS.neonGreen}
               isLast
             />
           </View>
-        </View>
+        </BlurView>
 
-        <View style={styles.card}>
+        <BlurView intensity={10} style={styles.card}>
           <Text style={styles.cardTitle}>ESP32 TELEMETRY</Text>
           <TelemetryRow label="Device ID" value="ESP32-01" />
-          <TelemetryRow label="RSSI" value="-42 dBm" valueColor={COLORS.green} />
-          <TelemetryRow label="Firmware" value="v2.4.1" />
+          <TelemetryRow label="RSSI" value="-42 dBm" valueColor={COLORS.neonGreen} />
           <TelemetryRow label="Uptime" value="72h 14m" />
-          <TelemetryRow label="Temperature" value="34.2°C" />
+          <TelemetryRow label="Internal Temp" value="34.2°C" valueColor={COLORS.neonAmber} />
+        </BlurView>
 
-          <View style={styles.latencyCard}>
-            <Text style={styles.latencyTitle}>Latency Metrics</Text>
-            <TelemetryRow label="Scan → Publish" value="127ms" valueColor={COLORS.teal} />
-            <TelemetryRow label="Publish → Decision" value="768ms" valueColor={COLORS.green} />
-            <TelemetryRow label="Decision → Trigger" value="65ms" valueColor={COLORS.green} />
-            <TelemetryRow label="Total Latency" value="960ms" valueColor={COLORS.teal} />
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>MQTT TOPICS & PAYLOAD EXCERPTS</Text>
-
+        <View style={styles.logSection}>
+          <Text style={styles.sectionTitle}>RAW PAYLOADS</Text>
           <CodeBlock
             title="Scan Request"
-            topic="Topic: veinGuard/esp32-01/scan/request"
+            topic="veinGuard/esp32-01/scan/request"
             payload={`{\n  "eventId": "${eventId}",\n  "deviceId": "ESP32-01",\n  "timestamp": "2024-01-15T14:23:42.341Z",\n  "userId": "${userSlug}",\n  "sensorData": {\n    "quality": 0.94,\n    "pattern": "*****MASKED*****"\n  }\n}`}
           />
-
           <CodeBlock
             title="Auth Response"
-            topic="Topic: veinGuard/esp32-01/auth/response"
+            topic="veinGuard/esp32-01/auth/response"
             payload={`{\n  "eventId": "${eventId}",\n  "result": "${eventStatus}",\n  "confidence": ${eventScore === '--' ? 'null' : (Number(eventScore.replace('%', '')) / 100).toFixed(3)},\n  "userId": "${userSlug}",\n  "timestamp": "2024-01-15T14:23:44.956Z",\n  "doorAction": "UNLOCK_5S"\n}`}
           />
         </View>
 
-        <View style={{ height: 28 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
@@ -230,223 +180,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.headerBg,
-    paddingHorizontal: 14,
-    paddingTop: 44,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.cardBorder,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  logoVein: { color: COLORS.white, fontWeight: '900', fontSize: 17, letterSpacing: 1 },
-  logoGuard: { color: COLORS.teal, fontWeight: '900', fontSize: 17, letterSpacing: 1, marginRight: 10 },
-  mqttBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.green,
-    borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  mqttDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: COLORS.green, marginRight: 4 },
-  mqttText: { color: COLORS.green, fontSize: 9, fontWeight: '700', letterSpacing: 0.6 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerTime: { color: COLORS.textDim, fontSize: 10 },
-  avatarCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.cardBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarEmoji: { fontSize: 13 },
-  adminText: { color: COLORS.text, fontSize: 11 },
-  dropdown: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginHorizontal: 14,
-    marginTop: 8,
-    marginBottom: 8,
-    padding: 10,
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-  },
-  dropdownText: { color: COLORS.teal, fontSize: 12 },
-  dropdownArrow: { color: COLORS.textDim, fontSize: 10 },
-  scroll: { flex: 1, paddingHorizontal: 14 },
-  scrollContent: { paddingBottom: 96 },
-  topNavRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 6,
-  },
-  backBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: COLORS.teal,
-    backgroundColor: '#072136',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  backIcon: { color: COLORS.teal, fontSize: 12, fontWeight: '800' },
-  breadcrumb: { color: COLORS.textDim, fontSize: 11, marginTop: 4, marginBottom: 8 },
-  breadcrumbCurrent: { color: COLORS.teal, fontWeight: '700' },
-  titleWrap: {
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    gap: 10,
-  },
-  pageTitle: {
-    color: COLORS.white,
-    fontSize: 36,
-    lineHeight: 36,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  pageSub: { color: COLORS.textDim, fontSize: 10, marginTop: 6 },
-  actionsWrap: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  actionBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  actionBtnText: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-    textAlign: 'center',
-  },
-  card: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    padding: 12,
-    marginBottom: 12,
-  },
-  cardTitle: {
-    color: COLORS.teal,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-    marginBottom: 10,
-  },
-  timelineItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 11,
-    borderBottomWidth: 1,
-    borderBottomColor: '#123250',
-  },
-  timelineItemLast: {
-    borderBottomWidth: 0,
-    paddingBottom: 2,
-  },
-  timelineList: {
-    position: 'relative',
-  },
-  timelineRail: {
-    position: 'absolute',
-    left: 14,
-    top: 16,
-    bottom: 12,
-    width: 1,
-    backgroundColor: '#1f4f76',
-  },
-  timelineIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    marginTop: 2,
-    backgroundColor: '#071323',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  timelineIcon: { color: COLORS.white, fontSize: 12 },
-  timelineMain: { flex: 1, paddingRight: 8 },
-  timelineTitle: { color: COLORS.white, fontSize: 12, fontWeight: '700' },
-  timelineDesc: { color: COLORS.text, fontSize: 10, marginTop: 3 },
-  timelineMeta: { fontSize: 9, marginTop: 3, fontWeight: '700' },
-  timelineTime: { color: COLORS.text, fontSize: 10, marginTop: 1 },
-  telemetryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 5,
-  },
-  telemetryLabel: { color: COLORS.textDim, fontSize: 11 },
-  telemetryValue: { fontSize: 11, fontWeight: '700' },
-  latencyCard: {
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#123250',
-    borderRadius: 8,
-    padding: 8,
-    backgroundColor: '#0a1629',
-  },
-  latencyTitle: {
-    color: COLORS.text,
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  codeCard: {
-    backgroundColor: '#0a1629',
-    borderWidth: 1,
-    borderColor: '#123250',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-  },
-  codeTitle: {
-    color: COLORS.teal,
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  codeTopic: {
-    color: COLORS.text,
-    fontSize: 10,
-    marginBottom: 8,
-  },
-  codeBox: {
-    backgroundColor: COLORS.codeBg,
-    borderColor: '#1e2f44',
-    borderWidth: 1,
-    borderRadius: 6,
-    padding: 10,
-  },
-  codeText: {
-    color: '#d6dde6',
-    fontSize: 10,
-    lineHeight: 15,
-    fontFamily: 'monospace',
-  },
+  backBtn: { width: 40, height: 40, justifyContent: 'center' },
+  headerTitle: { color: COLORS.white, fontSize: 18, fontWeight: '800', letterSpacing: 1 },
+  spacer: { width: 40 },
+
+  scroll: { flex: 1, paddingHorizontal: 20 },
+  scrollContent: { paddingTop: 10 },
+
+  titleSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
+  pageTitle: { color: COLORS.white, fontSize: 32, fontWeight: '900', letterSpacing: 1 },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
+  statusText: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+
+  actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 25 },
+  actionBtn: { flex: 1, borderRadius: 15, borderWidth: 1, paddingVertical: 15, alignItems: 'center', shadowOpacity: 0.1, shadowRadius: 10 },
+  actionBtnText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+
+  card: { borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)', marginBottom: 20, overflow: 'hidden' },
+  cardTitle: { color: COLORS.textDim, fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 20 },
+
+  timelineContainer: { paddingLeft: 5 },
+  timelineItem: { flexDirection: 'row', gap: 20, marginBottom: 0 },
+  timelineLeft: { alignItems: 'center', width: 10 },
+  timelineDot: { width: 10, height: 10, borderRadius: 5, zIndex: 1, shadowOpacity: 0.8, shadowRadius: 4 },
+  timelineLine: { width: 2, flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)', marginVertical: 2 },
+  timelineContent: { flex: 1, paddingBottom: 25 },
+  timelineHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
+  timelineTitle: { color: COLORS.white, fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
+  timelineTime: { color: COLORS.textDim, fontSize: 10, fontWeight: '600' },
+  timelineDesc: { color: COLORS.textSecondary, fontSize: 12, lineHeight: 18, marginBottom: 5 },
+  timelineMeta: { fontSize: 10, fontWeight: '700' },
+
+  telemetryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255, 255, 255, 0.03)' },
+  telemetryLabel: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '700' },
+  telemetryValue: { fontSize: 13, fontWeight: '800' },
+
+  logSection: { gap: 12 },
+  sectionTitle: { color: COLORS.textDim, fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 15 },
+  codeCard: { borderRadius: 20, padding: 15, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)', marginBottom: 15, overflow: 'hidden' },
+  codeTitle: { color: COLORS.neonCyan, fontSize: 11, fontWeight: '900', letterSpacing: 1, marginBottom: 5 },
+  codeTopic: { color: COLORS.textDim, fontSize: 10, marginBottom: 10 },
+  codeBox: { backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)' },
+  codeText: { color: '#8899aa', fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', lineHeight: 16 },
 });

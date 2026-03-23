@@ -9,65 +9,44 @@ import {
   Animated,
   Platform,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-
-const COLORS = {
-  bg: '#080e1a',
-  cardBg: '#0d1b2e',
-  cardBorder: '#1a3a5c',
-  green: '#00ff88',
-  greenDark: '#002a1a',
-  teal: '#00e5ff',
-  amber: '#e6a020',
-  red: '#ff3d5a',
-  redDark: '#2a0010',
-  purple: '#c000ff',
-  text: '#b8cfe0',
-  textDim: '#4a6a8a',
-  white: '#ffffff',
-  headerBg: '#0a1525',
-};
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { COLORS, GRADIENTS, SHADOWS } from '../theme';
 
 const devices = [
   {
     id: 'ESP32-01',
     role: 'PRIMARY SCANNER',
     status: 'ONLINE',
-    statusColor: '#00ff88',
-    borderColor: '#00ff88',
+    statusColor: COLORS.neonGreen,
     heartbeat: '2s ago',
     rssi: '-42 dBm',
     battery: '87%',
-    batteryColor: '#00ff88',
     firmware: 'v2.4.1',
-    dot: '#00ff88',
   },
   {
     id: 'ESP32-02',
     role: 'SECONDARY SCANNER',
     status: 'OFFLINE',
-    statusColor: '#ff3d5a',
-    borderColor: '#ff3d5a',
+    statusColor: COLORS.neonRed,
     heartbeat: '5m ago',
     rssi: '-',
     battery: '12%',
-    batteryColor: '#ff3d5a',
     firmware: 'v2.3.8',
-    dot: '#ff3d5a',
   },
   {
     id: 'ESP32-03',
     role: 'ACCESS CONTROL',
     status: 'ONLINE',
-    statusColor: '#00ff88',
-    borderColor: '#00ff88',
+    statusColor: COLORS.neonGreen,
     heartbeat: '1s ago',
     rssi: '-38 dBm',
     battery: 'AC Mains',
-    batteryColor: '#e6a020',
     firmware: 'v2.4.1',
-    dot: '#00ff88',
   },
 ];
 
@@ -90,49 +69,56 @@ function PulsingDot({ color }) {
 
 function DeviceCard({ device }) {
   const { t } = useTranslation();
+  const isOnline = device.status === 'ONLINE';
+  
   return (
-    <View style={[styles.deviceCard, { borderColor: device.borderColor + '55' }]}>
-      {/* Card header */}
+    <BlurView intensity={15} tint="dark" style={[styles.deviceCard, { borderColor: isOnline ? 'rgba(0, 242, 255, 0.2)' : 'rgba(255, 61, 90, 0.2)' }]}>
       <View style={styles.deviceHeader}>
-        <View>
-          <Text style={[styles.deviceId, { color: device.statusColor === '#00ff88' ? COLORS.teal : COLORS.red }]}>
+        <View style={styles.deviceHeaderMain}>
+          <Text style={[styles.deviceId, { color: isOnline ? COLORS.neonCyan : COLORS.neonRed }]}>
             {device.id}
           </Text>
           <Text style={styles.deviceRole}>{device.role}</Text>
         </View>
-        <PulsingDot color={device.dot} />
+        <PulsingDot color={isOnline ? COLORS.neonGreen : COLORS.neonRed} />
       </View>
 
-      {/* Stats */}
       <View style={styles.deviceStats}>
-        <View style={styles.deviceRow}>
-          <Text style={styles.deviceLabel}>{t('dashboard.status')}</Text>
-          <Text style={[styles.deviceValue, { color: device.statusColor }]}>{device.status}</Text>
+        <View style={styles.statLine}>
+          <Text style={styles.statLabel}>{t('dashboard.status')}</Text>
+          <Text style={[styles.statValue, { color: device.statusColor }]}>{device.status}</Text>
         </View>
-        <View style={styles.deviceRow}>
-          <Text style={styles.deviceLabel}>{t('dashboard.heartbeat')}</Text>
-          <Text style={styles.deviceValue}>{device.heartbeat}</Text>
-        </View>
-        <View style={styles.deviceRow}>
-          <Text style={styles.deviceLabel}>{t('dashboard.rssi')}</Text>
-          <Text style={styles.deviceValue}>{device.rssi}</Text>
-        </View>
-        <View style={styles.deviceRow}>
-          <Text style={styles.deviceLabel}>{t('dashboard.battery')}</Text>
-          <Text style={[styles.deviceValue, { color: device.batteryColor }]}>{device.battery}</Text>
-        </View>
-        <View style={[styles.deviceRow, { borderBottomWidth: 0 }]}>
-          <Text style={styles.deviceLabel}>{t('dashboard.firmware')}</Text>
-          <Text style={styles.deviceValue}>{device.firmware}</Text>
+        <View style={styles.statGrid}>
+          <View style={styles.statBox}>
+            <Ionicons name="wifi" size={14} color={COLORS.textSecondary} />
+            <Text style={styles.statBoxVal}>{device.rssi}</Text>
+            <Text style={styles.statBoxLabel}>{t('dashboard.rssi')}</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Ionicons name="battery-dead" size={14} color={COLORS.textSecondary} />
+            <Text style={styles.statBoxVal}>{device.battery}</Text>
+            <Text style={styles.statBoxLabel}>{t('dashboard.battery')}</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Ionicons name="pulse" size={14} color={COLORS.textSecondary} />
+            <Text style={styles.statBoxVal}>{device.heartbeat}</Text>
+            <Text style={styles.statBoxLabel}>{t('dashboard.heartbeat')}</Text>
+          </View>
         </View>
       </View>
-    </View>
+    </BlurView>
   );
 }
 
+import { useMqttStore } from '../store/mqttStore';
+
 export default function Dashboard({ navigation }) {
   const { t } = useTranslation();
+  const { width } = useWindowDimensions();
   const [time, setTime] = useState(new Date());
+  
+  const systemStatus = useMqttStore((state) => state.status);
+  const isConnected = useMqttStore((state) => state.isConnected);
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -142,26 +128,19 @@ export default function Dashboard({ navigation }) {
   const formatTime = (d) => {
     const h = String(d.getHours()).padStart(2, '0');
     const m = String(d.getMinutes()).padStart(2, '0');
-    const s = String(d.getSeconds()).padStart(2, '0');
-    return `${h}:${m}:${s}`;
+    return `${h}:${m}`;
   };
 
   const handleLogout = () => {
     Alert.alert(
-      "Déconnexion",
-      "Voulez-vous vraiment vous déconnecter ?",
+      t('common.logout') || "Déconnexion",
+      t('common.logoutConfirm') || "Voulez-vous vraiment vous déconnecter ?",
       [
-        { text: "Annuler", style: "cancel" },
+        { text: t('common.cancel'), style: "cancel" },
         { 
-          text: "Déconnexion", 
+          text: t('common.logout'), 
           style: "destructive",
-          onPress: async () => {
-            try {
-              const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'http://127.0.0.1:5000/api';
-              await fetch(`${API_URL}/logout`, { method: 'POST' });
-            } catch (e) {
-              console.log("Logout backend non disponible", e);
-            }
+          onPress: () => {
             if (navigation) navigation.navigate('Login');
           }
         }
@@ -169,119 +148,114 @@ export default function Dashboard({ navigation }) {
     );
   };
 
+  const viewportWidth = Math.min(width, 600);
+
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" />
+      <LinearGradient colors={GRADIENTS.primary} style={StyleSheet.absoluteFill} />
 
       {/* Header */}
-      <View style={styles.header}>
+      <BlurView intensity={30} tint="dark" style={styles.header}>
         <View style={styles.headerLeft}>
+          <Text style={styles.headerTime}>{formatTime(time)}</Text>
+          <View style={styles.vDivider} />
           <Text style={styles.logoVein}>VEIN</Text>
           <Text style={styles.logoGuard}>GUARD</Text>
-          <View style={styles.mqttBadge}>
-            <PulsingDot color={COLORS.green} />
-            <Text style={styles.mqttText}>{t('login.mqttBadge')}</Text>
-          </View>
         </View>
         <View style={styles.headerRight}>
-          <Text style={styles.headerTime}>{formatTime(time)}  UTC-4</Text>
-          <TouchableOpacity style={styles.avatarCircle} onPress={handleLogout}>
-            <Text style={{ fontSize: 14 }}>👤</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleLogout}>
-            <Text style={styles.adminText}>{t('common.admin')} ⏏</Text>
+          <TouchableOpacity style={styles.profileBtn} onPress={handleLogout}>
+            <LinearGradient colors={['#1c3d5a', '#0d1b2e']} style={styles.avatarGlow}>
+              <Ionicons name="person" size={16} color={COLORS.neonCyan} />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
-      </View>
+      </BlurView>
 
-      {/* Security Alert */}
-      <View style={styles.alertBanner}>
-        <Text style={styles.alertIcon}>⚠</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.alertTitle}>{t('dashboard.securityAlert')}</Text>
-          <Text style={styles.alertSub}>Unusual access pattern detected on Device ESP32-01. Last failed attempt: 2 minutes ago.</Text>
-        </View>
-        <TouchableOpacity>
-          <Text style={styles.alertClose}>✕</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-
-        {/* Page title */}
-        <View style={styles.titleRow}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Welcome Section */}
+        <View style={styles.welcome}>
           <View>
-            <Text style={styles.pageTitle}>{t('dashboard.title')}</Text>
-            <Text style={styles.pageSubtitle}>{t('dashboard.subtitle')}</Text>
+            <Text style={styles.greeting}>{t('dashboard.title')}</Text>
+            <Text style={styles.subtitle}>{t('dashboard.subtitle')}</Text>
           </View>
-          <View style={styles.systemStatus}>
-            <Text style={styles.systemStatusLabel}>{t('dashboard.systemStatus')}</Text>
-            <Text style={styles.systemStatusValue}>{t('dashboard.operational')}</Text>
-          </View>
-        </View>
-
-        {/* Device Cards */}
-        {devices.map((d) => (
-          <DeviceCard key={d.id} device={d} />
-        ))}
-
-        {/* MQTT Broker Status */}
-        <View style={styles.mqttCard}>
-          <View style={styles.mqttCardHeader}>
-            <Text style={styles.mqttCardTitle}>{t('dashboard.mqttBrokerStatus')}</Text>
-            <View style={styles.mqttConnected}>
-              <View style={[styles.statusDot, { backgroundColor: COLORS.green }]} />
-              <Text style={styles.mqttConnectedText}>{t('dashboard.connected')}</Text>
-            </View>
-          </View>
-          <View style={styles.mqttStats}>
-            <View style={styles.mqttStat}>
-              <Text style={[styles.mqttStatNum, { color: COLORS.white }]}>47</Text>
-              <Text style={styles.mqttStatLabel}>{t('dashboard.messageRate')}</Text>
-            </View>
-            <View style={styles.mqttStat}>
-              <Text style={[styles.mqttStatNum, { color: COLORS.teal }]}>3</Text>
-              <Text style={styles.mqttStatLabel}>{t('dashboard.activeDevices')}</Text>
-            </View>
-            <View style={styles.mqttStat}>
-              <Text style={[styles.mqttStatNum, { color: COLORS.amber }]}>12</Text>
-              <Text style={styles.mqttStatLabel}>{t('dashboard.topics')}</Text>
-            </View>
-            <View style={styles.mqttStat}>
-              <Text style={[styles.mqttStatNum, { color: COLORS.green }]}>99.6%</Text>
-              <Text style={styles.mqttStatLabel}>{t('dashboard.uptime')}</Text>
-            </View>
+          <View style={[styles.systemBadge, { backgroundColor: isConnected ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 61, 90, 0.1)', borderColor: isConnected ? 'rgba(57, 255, 20, 0.3)' : 'rgba(255, 61, 90, 0.3)' }]}>
+            <Text style={[styles.systemBadgeText, { color: isConnected ? COLORS.neonGreen : COLORS.neonRed }]}>{systemStatus.toUpperCase()}</Text>
           </View>
         </View>
 
-        {/* Quick Actions */}
-        <View style={styles.actionsRow}>
-          <TouchableOpacity
-            style={[styles.actionBtn, { borderColor: COLORS.purple, backgroundColor: COLORS.purple + '18' }]}
+        {/* Security Alert Banner */}
+        <View style={[styles.alertBanner, { borderColor: isConnected ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 61, 90, 0.1)' }]}>
+          <Ionicons name={isConnected ? "shield-checkmark" : "warning"} size={20} color={isConnected ? COLORS.neonGreen : COLORS.neonRed} />
+          <Text style={styles.alertText}>{isConnected ? "System Secure. All protocols active." : "Gateway Offline. Limited functionality."}</Text>
+        </View>
+
+        {/* Main Actions - Grid */}
+        <View style={styles.actionGrid}>
+          <TouchableOpacity 
+            style={styles.mainAction} 
             onPress={() => navigation?.navigate('VeinScan')}
           >
-            <Text style={styles.actionIcon}>✋</Text>
-            <Text style={[styles.actionLabel, { color: COLORS.purple }]}>{t('dashboard.startVeinScan')}</Text>
+            <LinearGradient colors={['rgba(188, 19, 254, 0.2)', 'rgba(138, 43, 226, 0.1)']} style={styles.actionInner}>
+              <Ionicons name="hand-left" size={32} color={COLORS.neonPurple} />
+              <Text style={[styles.actionLabel, { color: COLORS.neonPurple }]}>{t('dashboard.startVeinScan')}</Text>
+            </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.actionBtn, { borderColor: COLORS.teal, backgroundColor: COLORS.teal + '14' }]}
-            onPress={() => navigation?.navigate('AccessHistory')}
-          >
-            <Text style={styles.actionIcon}>🕐</Text>
-            <Text style={[styles.actionLabel, { color: COLORS.teal }]}>{t('dashboard.viewHistory')}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionBtn, { borderColor: COLORS.amber, backgroundColor: COLORS.amber + '18' }]}
-            onPress={() => navigation?.navigate('UserManagement')}
-          >
-            <Text style={styles.actionIcon}>👥</Text>
-            <Text style={[styles.actionLabel, { color: COLORS.amber }]}>{t('dashboard.manageUsers')}</Text>
-          </TouchableOpacity>
+          <View style={styles.sideActions}>
+            <TouchableOpacity style={styles.sideAction} onPress={() => navigation?.navigate('AccessHistory')}>
+              <BlurView intensity={10} style={styles.sideActionInner}>
+                <Ionicons name="time" size={20} color={COLORS.neonCyan} />
+                <Text style={styles.sideActionLabel}>{t('dashboard.viewHistory')}</Text>
+              </BlurView>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sideAction} onPress={() => navigation?.navigate('UserManagement')}>
+              <BlurView intensity={10} style={styles.sideActionInner}>
+                <Ionicons name="people" size={20} color={COLORS.neonAmber} />
+                <Text style={styles.sideActionLabel}>{t('dashboard.manageUsers')}</Text>
+              </BlurView>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={{ height: 24 }} />
+        {/* Device Section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>ACTIVE NODES</Text>
+          <Text style={styles.nodeCount}>3 ONLINE</Text>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.deviceScroll}>
+          {devices.map((d) => (
+            <DeviceCard key={d.id} device={d} />
+          ))}
+        </ScrollView>
+
+        {/* Broker Status */}
+        <BlurView intensity={15} tint="dark" style={styles.brokerCard}>
+          <View style={styles.brokerHeader}>
+            <Ionicons name="radio" size={18} color={COLORS.neonCyan} />
+            <Text style={styles.brokerTitle}>MQTT CLUSTER STATUS</Text>
+            <Text style={styles.brokerStatus}>99.9% UPTIME</Text>
+          </View>
+          <View style={styles.brokerStats}>
+            <View style={styles.brokerStat}>
+              <Text style={styles.statNum}>47</Text>
+              <Text style={styles.statSubtitle}>MSG/S</Text>
+            </View>
+            <View style={styles.vLine} />
+            <View style={styles.brokerStat}>
+              <Text style={styles.statNum}>12</Text>
+              <Text style={styles.statSubtitle}>TOPICS</Text>
+            </View>
+            <View style={styles.vLine} />
+            <View style={styles.brokerStat}>
+              <Text style={styles.statNum}>0</Text>
+              <Text style={styles.statSubtitle}>DROPPED</Text>
+            </View>
+          </View>
+        </BlurView>
+
+        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
@@ -289,97 +263,107 @@ export default function Dashboard({ navigation }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },
-
-  // Header
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: COLORS.headerBg, paddingHorizontal: 14, paddingTop: 44, paddingBottom: 10,
-    borderBottomWidth: 1, borderBottomColor: COLORS.cardBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 15,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  logoVein: { color: '#fff', fontWeight: '900', fontSize: 17, letterSpacing: 1 },
-  logoGuard: { color: COLORS.teal, fontWeight: '900', fontSize: 17, letterSpacing: 1, marginRight: 8 },
-  mqttBadge: {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: COLORS.green, borderRadius: 20,
-    paddingHorizontal: 8, paddingVertical: 3, gap: 4,
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  headerTime: { color: COLORS.white, fontWeight: '700', fontSize: 16 },
+  vDivider: { width: 1, height: 16, backgroundColor: 'rgba(255, 255, 255, 0.2)', marginHorizontal: 12 },
+  logoVein: { color: COLORS.white, fontWeight: '900', fontSize: 16, letterSpacing: 1 },
+  logoGuard: { color: COLORS.neonCyan, fontWeight: '900', fontSize: 16, letterSpacing: 1 },
+  profileBtn: { 
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    overflow: 'hidden',
   },
-  mqttText: { color: COLORS.green, fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerTime: { color: COLORS.textDim, fontSize: 9 },
-  avatarCircle: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: COLORS.cardBorder, alignItems: 'center', justifyContent: 'center',
+  avatarGlow: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  adminText: { color: COLORS.text, fontSize: 11 },
 
-  // Alert
+  scroll: { padding: 20 },
+  welcome: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 25 },
+  greeting: { color: COLORS.white, fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
+  subtitle: { color: COLORS.textSecondary, fontSize: 14, marginTop: 4 },
+  systemBadge: {
+    backgroundColor: 'rgba(57, 255, 20, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(57, 255, 20, 0.3)',
+  },
+  systemBadgeText: { color: COLORS.neonGreen, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+
   alertBanner: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    backgroundColor: '#2a0d00', borderBottomWidth: 1, borderBottomColor: '#7a2000',
-    paddingHorizontal: 14, paddingVertical: 10, gap: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(57, 255, 20, 0.05)',
+    padding: 15,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(57, 255, 20, 0.1)',
+    marginBottom: 25,
+    gap: 12,
   },
-  alertIcon: { color: COLORS.amber, fontSize: 16, marginTop: 1 },
-  alertTitle: { color: COLORS.amber, fontSize: 12, fontWeight: '700' },
-  alertSub: { color: '#c07030', fontSize: 10, marginTop: 2, lineHeight: 14 },
-  alertClose: { color: COLORS.textDim, fontSize: 14, marginTop: 1 },
+  alertText: { color: COLORS.textSecondary, fontSize: 13, fontWeight: '500' },
 
-  scroll: { flex: 1, paddingHorizontal: 14 },
+  actionGrid: { flexDirection: 'row', gap: 15, marginBottom: 30 },
+  mainAction: { flex: 1.2, height: 140, borderRadius: 24, overflow: 'hidden' },
+  actionInner: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  actionLabel: { marginTop: 12, fontSize: 13, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
+  sideActions: { flex: 1, gap: 15 },
+  sideAction: { flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)' },
+  sideActionInner: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
+  sideActionLabel: { color: COLORS.white, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
 
-  // Title
-  titleRow: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    justifyContent: 'space-between', marginTop: 14, marginBottom: 12,
-  },
-  pageTitle: { color: COLORS.white, fontSize: 18, fontWeight: '900', letterSpacing: 1 },
-  pageSubtitle: { color: COLORS.textDim, fontSize: 10, marginTop: 2 },
-  systemStatus: { alignItems: 'flex-end' },
-  systemStatusLabel: { color: COLORS.textDim, fontSize: 8, letterSpacing: 1 },
-  systemStatusValue: { color: COLORS.green, fontSize: 11, fontWeight: '800', marginTop: 2 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 15 },
+  sectionTitle: { color: COLORS.textDim, fontSize: 12, fontWeight: '800', letterSpacing: 2 },
+  nodeCount: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '700' },
 
-  // Device Card
+  deviceScroll: { paddingRight: 20, gap: 15 },
   deviceCard: {
-    backgroundColor: COLORS.cardBg, borderRadius: 10, borderWidth: 1,
-    padding: 14, marginBottom: 10,
+    width: 250,
+    backgroundColor: 'rgba(13, 27, 46, 0.4)',
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
   },
-  deviceHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10,
-  },
-  deviceId: { fontSize: 15, fontWeight: '900', letterSpacing: 1 },
-  deviceRole: { color: COLORS.textDim, fontSize: 9, letterSpacing: 1, marginTop: 2 },
-  deviceStats: {},
-  deviceRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: COLORS.cardBorder + '88',
-  },
-  deviceLabel: { color: COLORS.textDim, fontSize: 11 },
-  deviceValue: { color: COLORS.white, fontSize: 11, fontWeight: '600' },
+  deviceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  deviceId: { fontSize: 18, fontWeight: '900', letterSpacing: 1 },
+  deviceRole: { color: COLORS.textSecondary, fontSize: 10, marginTop: 4, letterSpacing: 1 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  
+  statLine: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+  statLabel: { color: COLORS.textSecondary, fontSize: 12 },
+  statValue: { fontSize: 12, fontWeight: '700' },
+  statGrid: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: 12, padding: 12 },
+  statBox: { alignItems: 'center', gap: 4 },
+  statBoxVal: { color: COLORS.white, fontSize: 11, fontWeight: '700' },
+  statBoxLabel: { color: COLORS.textDim, fontSize: 8, fontWeight: '600' },
 
-  // Dot
-  statusDot: { width: 9, height: 9, borderRadius: 4.5 },
-
-  // MQTT Card
-  mqttCard: {
-    backgroundColor: COLORS.cardBg, borderRadius: 10, borderWidth: 1,
-    borderColor: COLORS.cardBorder, padding: 14, marginBottom: 12,
+  brokerCard: {
+    marginTop: 20,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
-  mqttCardHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14,
-  },
-  mqttCardTitle: { color: COLORS.teal, fontSize: 11, fontWeight: '800', letterSpacing: 2 },
-  mqttConnected: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  mqttConnectedText: { color: COLORS.green, fontSize: 10, fontWeight: '700' },
-  mqttStats: { flexDirection: 'row', justifyContent: 'space-between' },
-  mqttStat: { alignItems: 'center', flex: 1 },
-  mqttStatNum: { fontSize: 20, fontWeight: '900' },
-  mqttStatLabel: { color: COLORS.textDim, fontSize: 8, letterSpacing: 0.5, marginTop: 3, textAlign: 'center' },
-
-  // Actions
-  actionsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  actionBtn: {
-    flex: 1, borderRadius: 10, borderWidth: 1,
-    paddingVertical: 18, alignItems: 'center', justifyContent: 'center',
-  },
-  actionIcon: { fontSize: 22, marginBottom: 6 },
-  actionLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5, textAlign: 'center' },
+  brokerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 10 },
+  brokerTitle: { flex: 1, color: COLORS.white, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  brokerStatus: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '700' },
+  brokerStats: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
+  brokerStat: { alignItems: 'center' },
+  statNum: { color: COLORS.white, fontSize: 24, fontWeight: '900' },
+  statSubtitle: { color: COLORS.textDim, fontSize: 10, fontWeight: '700', marginTop: 4 },
+  vLine: { width: 1, height: 30, backgroundColor: 'rgba(255, 255, 255, 0.05)' },
 });
