@@ -4,9 +4,22 @@ import io
 import sys
 import os
 
-# Ensure we can import pbbm even if launched from another dir
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from pbbm import generate_pbbm, extract_lbp, match_pbbm_translate
+try:
+    from .pbbm import generate_pbbm, extract_lbp, match_pbbm_translate
+except ImportError:
+    from pbbm import generate_pbbm, extract_lbp, match_pbbm_translate
+
+from ..hardware.camera import VeinCamera
+
+_camera = VeinCamera()
+
+def capture_image(filename="capture.jpg"):
+    """
+    Captures an image using the hardware camera and returns the bytes.
+    """
+    _camera.capture(filename)
+    with open(filename, "rb") as f:
+        return f.read()
 
 def _bytes_to_image(image_bytes):
     """

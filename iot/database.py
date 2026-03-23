@@ -45,6 +45,18 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
         )
     ''')
+
+    # Create Audit Logs table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            level TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            meta TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     
     # Create Settings table
     c.execute('''
@@ -55,12 +67,20 @@ def init_db():
     ''')
     
     # Create a default admin if not exists
-    c.execute("SELECT * FROM users WHERE username = 'admin'")
+    c.execute("SELECT * FROM users WHERE username = 'admin@gmail.com'")
     if not c.fetchone():
         from werkzeug.security import generate_password_hash
-        default_hash = generate_password_hash('admin123', method='pbkdf2:sha256')
+        default_hash = generate_password_hash('admin1234', method='pbkdf2:sha256')
         c.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", 
-                  ('admin', default_hash, 'admin'))
+                  ('admin@gmail.com', default_hash, 'admin'))
+    
+    # Pre-populate some audit logs for demonstration if empty
+    c.execute("SELECT COUNT(*) FROM audit_logs")
+    if c.fetchone()[0] == 0:
+        c.execute("INSERT INTO audit_logs (level, title, description, meta) VALUES (?, ?, ?, ?)",
+                  ('CRITICAL', 'SYSTEM MODERNIZATION', 'Transitioned to pure MQTT architecture', 'ID: VG-2024-AUTO'))
+        c.execute("INSERT INTO audit_logs (level, title, description, meta) VALUES (?, ?, ?, ?)",
+                  ('HIGH', 'DATABASE UPGRADE', 'Added secure audit logs table', 'Schema: v2.1'))
     
     conn.commit()
     conn.close()
