@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   StatusBar,
   Animated,
+  Platform,
+  Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -144,6 +146,29 @@ export default function Dashboard({ navigation }) {
     return `${h}:${m}:${s}`;
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      "Déconnexion",
+      "Voulez-vous vraiment vous déconnecter ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        { 
+          text: "Déconnexion", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'http://127.0.0.1:5000/api';
+              await fetch(`${API_URL}/logout`, { method: 'POST' });
+            } catch (e) {
+              console.log("Logout backend non disponible", e);
+            }
+            if (navigation) navigation.navigate('Login');
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
@@ -160,10 +185,12 @@ export default function Dashboard({ navigation }) {
         </View>
         <View style={styles.headerRight}>
           <Text style={styles.headerTime}>{formatTime(time)}  UTC-4</Text>
-          <View style={styles.avatarCircle}>
+          <TouchableOpacity style={styles.avatarCircle} onPress={handleLogout}>
             <Text style={{ fontSize: 14 }}>👤</Text>
-          </View>
-          <Text style={styles.adminText}>{t('common.admin')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleLogout}>
+            <Text style={styles.adminText}>{t('common.admin')} ⏏</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
