@@ -1,5 +1,6 @@
-import time
 from .base import Actuator
+import time
+
 
 try:
     import RPi.GPIO as GPIO
