@@ -504,8 +504,8 @@ def build_identification_profile(frames_bgr: list[np.ndarray]) -> dict[str, Any]
 
 
 def _relative_score(value_a: float, value_b: float) -> float:
-    denominator = max(abs(value_b), 1e-6)
-    return abs(value_a - value_b) / denominator
+    denominator = max(abs(value_a), abs(value_b), 1.0)
+    return min(abs(value_a - value_b) / denominator, 1.0)
 
 
 def _descriptor_match_score(live_rows: list[list[int]], ref_rows: list[list[int]]) -> float:
@@ -528,31 +528,31 @@ def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, An
     live_geometry = live_profile["palmprint"]["geometry"]
     ref_geometry = stored_profile["palmprint"]["geometry"]
 
-    numeric_fields = [
-        "area",
-        "perimeter",
-        "aspect_ratio",
-        "hull_area",
-        "solidity",
-        "convexity_defects",
-        "finger_peaks",
+    geometry_components = [
+        _relative_score(live_geometry["aspect_ratio"], ref_geometry["aspect_ratio"]),
+        _relative_score(live_geometry["solidity"], ref_geometry["solidity"]),
+        _relative_score(live_geometry["convexity_defects"], ref_geometry["convexity_defects"]),
+        _relative_score(live_geometry["finger_peaks"], ref_geometry["finger_peaks"]),
+        0.5 * _relative_score(live_geometry["area"], ref_geometry["area"]),
+        0.5 * _relative_score(live_geometry["perimeter"], ref_geometry["perimeter"]),
     ]
-    geometry_score = float(np.mean([_relative_score(live_geometry[field], ref_geometry[field]) for field in numeric_fields]))
+    geometry_score = float(np.mean(np.array(geometry_components, dtype=np.float32)))
 
     live_hu = np.array(live_geometry["hu"], dtype=np.float32)
     ref_hu = np.array(ref_geometry["hu"], dtype=np.float32)
-    hu_score = float(np.mean(np.abs(live_hu - ref_hu) / np.maximum(np.abs(ref_hu), 1e-6)))
+    hu_denominator = np.maximum(np.maximum(np.abs(live_hu), np.abs(ref_hu)), 1.0)
+    hu_score = float(np.mean(np.abs(live_hu - ref_hu) / hu_denominator))
 
     live_orb = np.array(live_profile["palmprint"]["orb_signature"], dtype=np.float32)
     ref_orb = np.array(stored_profile["palmprint"]["orb_signature"], dtype=np.float32)
     orb_score = float(np.mean(np.abs(live_orb - ref_orb) / 255.0))
     component_weights = {
-        "geometry": 0.28,
-        "hu": 0.18,
+        "geometry": 0.32,
+        "hu": 0.24,
         "orb": 0.18,
-        "histogram": 0.16,
-        "descriptor": 0.14,
-        "texture_density": 0.06,
+        "histogram": 0.12,
+        "descriptor": 0.10,
+        "texture_density": 0.04,
     }
     available_components = {
         "geometry": geometry_score,
@@ -650,7 +650,7 @@ def verify_identification_profile(live_profile: dict[str, Any], stored_profile: 
     best_result = ranked_results[0]
     top_results = ranked_results[: min(2, len(ranked_results))]
     top_mean = float(np.mean(np.array([result["score"] for result in top_results], dtype=np.float32)))
-    combined_score = round(float(0.45 * fused_result["score"] + 0.35 * best_result["score"] + 0.20 * top_mean), 4)
+    combined_score = round(float(0.20 * fused_result["score"] + 0.55 * best_result["score"] + 0.25 * top_mean), 4)
     quality_gate_passed = any(result.get("quality_gate_passed") for result in ranked_results)
     score_gate_passed = combined_score <= config.MATCH_THRESHOLD
 
