@@ -12,7 +12,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import config
 import database
-from biometrics.biometrics_service import build_enrollment_profile, verify_multimodal
+from biometrics.biometrics_service import build_enrollment_profile, verify_live_profile
 from cloud.firebase_service import FirebaseService
 from core.security_controller import SecurityController
 
@@ -97,8 +97,20 @@ class BioGuardMQTTGateway:
         try:
             capture = self.controller.capture_attempt(claimed_user_id=user_id)
         except Exception as exc:
-            self.controller.handle_access_denied("Capture invalide")
-            self.client.publish(response_topic, json.dumps({"status": "error", "error": str(exc)}))
+            self.controller.handle_access_denied("Main absente")
+            self._record_access(
+                user_id=user_id,
+                username=data.get("username"),
+                status="DENIED",
+                score=None,
+                reason="INVALID_CAPTURE",
+                method="multimodal_scan",
+                modalities={"error": str(exc)},
+            )
+            self.client.publish(
+                response_topic,
+                json.dumps({"status": "fail", "reason": "INVALID_CAPTURE", "error": str(exc)}),
+            )
             return
 
         matched_user = None
@@ -114,7 +126,7 @@ class BioGuardMQTTGateway:
             candidates = database.list_biometric_profiles()
             best_candidate = None
             for candidate in candidates:
-                result = verify_multimodal(capture["frame"], candidate["profile"])
+                result = verify_live_profile(capture["profile"], candidate["profile"])
                 if best_candidate is None or result["score"] < best_candidate["result"]["score"]:
                     best_candidate = {"candidate": candidate, "result": result}
             if best_candidate and best_candidate["result"]["match"]:
@@ -139,7 +151,7 @@ class BioGuardMQTTGateway:
             self.client.publish(response_topic, json.dumps({"status": "fail", "reason": "PROFILE_NOT_FOUND" if user_id else "NO_MATCH_FOUND"}))
             return
 
-        result = matched_user.get("prefetched_result") or verify_multimodal(capture["frame"], matched_user["profile"])
+        result = matched_user.get("prefetched_result") or verify_live_profile(capture["profile"], matched_user["profile"])
         if result["match"]:
             self.controller.handle_access_granted(matched_user["username"], result["score"])
             status = "GRANTED"
@@ -159,6 +171,9 @@ class BioGuardMQTTGateway:
             modalities={
                 "components": result["components"],
                 "biometric_key": result["live_profile"]["biometric_key"],
+                "quality": result["live_profile"]["palmprint"].get("quality"),
+                "quality_gate_passed": result.get("quality_gate_passed"),
+                "quality_reason": result.get("quality_reason"),
                 "telemetry": capture["telemetry"],
                 "preview_path": capture["preview_path"],
             },
@@ -172,6 +187,9 @@ class BioGuardMQTTGateway:
             "biometric_key": result["live_profile"]["biometric_key"],
             "score": result["score"],
             "threshold": result["threshold"],
+            "quality_gate_passed": result.get("quality_gate_passed"),
+            "quality_reason": result.get("quality_reason"),
+            "quality": result["live_profile"]["palmprint"].get("quality"),
             "components": result["components"],
             "event": event,
         }
@@ -190,23 +208,41 @@ class BioGuardMQTTGateway:
 
         enrollment_frames = []
         preview_paths = []
+        attempts = 0
         try:
-            for index in range(config.ENROLLMENT_SAMPLE_COUNT):
+            while len(enrollment_frames) < config.ENROLLMENT_SAMPLE_COUNT and attempts < config.ENROLLMENT_MAX_ATTEMPTS:
+                attempts += 1
+                sample_index = len(enrollment_frames) + 1
                 self.publish_status(
                     "ONLINE",
                     phase="ENROLLMENT",
-                    sample_index=index + 1,
+                    sample_index=sample_index,
                     sample_count=config.ENROLLMENT_SAMPLE_COUNT,
+                    attempts=attempts,
                 )
                 self.controller.lcd.show_message(
-                    f"Angle {index + 1}/{config.ENROLLMENT_SAMPLE_COUNT}",
+                    f"Angle {sample_index}/{config.ENROLLMENT_SAMPLE_COUNT}",
                     user_id[: config.LCD_COLS],
                 )
-                capture = self.controller.capture_attempt(claimed_user_id=f"{user_id}_{index + 1}")
-                enrollment_frames.append(capture["frame"])
-                if capture["preview_path"]:
-                    preview_paths.append(capture["preview_path"])
+                try:
+                    capture = self.controller.capture_attempt(claimed_user_id=f"{user_id}_{sample_index}")
+                    enrollment_frames.append(capture["frame"])
+                    if capture["preview_path"]:
+                        preview_paths.append(capture["preview_path"])
+                except Exception as exc:
+                    logger.warning("Enrollment sample rejected for %s: %s", user_id, exc)
+                    self.publish_status(
+                        "ONLINE",
+                        phase="ENROLLMENT_RETRY",
+                        sample_index=sample_index,
+                        sample_count=config.ENROLLMENT_SAMPLE_COUNT,
+                        attempts=attempts,
+                        reason=str(exc),
+                    )
+                    self.controller.lcd.show_message("Repositionne", "la main")
                 time.sleep(0.4)
+            if len(enrollment_frames) < config.ENROLLMENT_SAMPLE_COUNT:
+                raise ValueError("Nombre d'echantillons valides insuffisant pour l'enrolement.")
             profile = build_enrollment_profile(enrollment_frames)
         except Exception as exc:
             self.client.publish(response_topic, json.dumps({"status": "error", "error": str(exc)}))

@@ -100,7 +100,19 @@ def segment_hand(frame_bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndar
     return roi, mask, contour, gray
 
 
-def _extract_geometry(contour: np.ndarray) -> dict[str, Any]:
+def _border_touch_count(x: int, y: int, w: int, h: int, shape: tuple[int, int], margin: int = 8) -> int:
+    height, width = shape[:2]
+    return sum(
+        (
+            x <= margin,
+            y <= margin,
+            x + w >= width - margin,
+            y + h >= height - margin,
+        )
+    )
+
+
+def _extract_geometry(contour: np.ndarray, frame_shape: tuple[int, int]) -> dict[str, Any]:
     area = float(cv2.contourArea(contour))
     perimeter = float(cv2.arcLength(contour, True))
     x, y, w, h = cv2.boundingRect(contour)
@@ -108,9 +120,20 @@ def _extract_geometry(contour: np.ndarray) -> dict[str, Any]:
     hull_area = float(cv2.contourArea(hull))
     solidity = area / hull_area if hull_area else 0.0
     aspect_ratio = (w / h) if h else 0.0
+    extent = area / float(max(w * h, 1))
+    roi_area = float(max(frame_shape[0] * frame_shape[1], 1))
+    area_ratio = area / roi_area
 
     moments = cv2.moments(contour)
     hu_log = _log_hu(cv2.HuMoments(moments))
+    center_x = (moments["m10"] / moments["m00"]) if moments["m00"] else x + (w / 2.0)
+    center_y = (moments["m01"] / moments["m00"]) if moments["m00"] else y + (h / 2.0)
+    roi_center_x = frame_shape[1] / 2.0
+    roi_center_y = frame_shape[0] / 2.0
+    max_center_distance = max(float(np.hypot(roi_center_x, roi_center_y)), 1.0)
+    center_distance_ratio = float(
+        np.hypot(center_x - roi_center_x, center_y - roi_center_y) / max_center_distance
+    )
 
     defects_count = 0
     finger_peaks = 0
@@ -129,8 +152,12 @@ def _extract_geometry(contour: np.ndarray) -> dict[str, Any]:
         "area": round(area, 4),
         "perimeter": round(perimeter, 4),
         "aspect_ratio": round(aspect_ratio, 6),
+        "extent": round(extent, 6),
+        "area_ratio": round(area_ratio, 6),
         "hull_area": round(hull_area, 4),
         "solidity": round(solidity, 6),
+        "center_distance_ratio": round(center_distance_ratio, 6),
+        "border_touch_count": int(_border_touch_count(x, y, w, h, frame_shape)),
         "convexity_defects": int(defects_count),
         "finger_peaks": int(finger_peaks),
         "hu": [round(value, 6) for value in hu_log],
@@ -178,12 +205,47 @@ def _quality_score(hand_area: float, keypoints: int, vein_density: float, sharpn
     )
 
 
+def _capture_validation(geometry: dict[str, Any], quality: dict[str, Any]) -> dict[str, Any]:
+    checks = {
+        "hand_area_ratio": geometry["area_ratio"] <= config.MAX_HAND_AREA_RATIO,
+        "mask_fill_ratio": config.MIN_MASK_FILL_RATIO <= quality["mask_fill_ratio"] <= config.MAX_MASK_FILL_RATIO,
+        "extent": geometry["extent"] >= config.MIN_HAND_EXTENT,
+        "solidity": config.MIN_HAND_SOLIDITY <= geometry["solidity"] <= config.MAX_HAND_SOLIDITY,
+        "aspect_ratio": config.MIN_HAND_ASPECT_RATIO <= geometry["aspect_ratio"] <= config.MAX_HAND_ASPECT_RATIO,
+        "center_distance_ratio": geometry["center_distance_ratio"] <= config.MAX_HAND_CENTER_DISTANCE,
+        "border_touch_count": geometry["border_touch_count"] <= config.MAX_BORDER_TOUCHES,
+        "keypoints": quality["keypoints"] >= config.MIN_ORB_KEYPOINTS,
+        "sharpness": quality["sharpness"] >= config.MIN_SHARPNESS,
+        "quality_score": quality["score"] >= config.MIN_CAPTURE_QUALITY,
+    }
+    failed_checks = [name for name, passed in checks.items() if not passed]
+    reason_map = {
+        "hand_area_ratio": "main trop large ou decor dominant dans le cadre",
+        "mask_fill_ratio": "main absente ou hors cadrage",
+        "extent": "forme detectee trop diffuse pour etre une main",
+        "solidity": "silhouette de main incoherente",
+        "aspect_ratio": "orientation de la main non exploitable",
+        "center_distance_ratio": "main trop decalee du centre",
+        "border_touch_count": "main trop coupee par le bord",
+        "keypoints": "texture palmaire insuffisante",
+        "sharpness": "image trop floue",
+        "quality_score": "qualite biométrique insuffisante",
+    }
+    reason = reason_map.get(failed_checks[0], "capture biométrique invalide") if failed_checks else ""
+    return {
+        "valid": not failed_checks,
+        "failed_checks": failed_checks,
+        "reason": reason,
+        "checks": checks,
+    }
+
+
 def build_multimodal_profile(frame_bgr: np.ndarray) -> dict[str, Any]:
     roi, hand_mask, contour, gray_roi = segment_hand(frame_bgr)
     if contour is None:
         raise ValueError("Aucune paume exploitable detectee dans la ROI.")
 
-    geometry = _extract_geometry(contour)
+    geometry = _extract_geometry(contour, gray_roi.shape)
 
     contour_mask = np.zeros(gray_roi.shape, dtype=np.uint8)
     cv2.drawContours(contour_mask, [contour], -1, 255, thickness=cv2.FILLED)
@@ -204,6 +266,10 @@ def build_multimodal_profile(frame_bgr: np.ndarray) -> dict[str, Any]:
         "sharpness": round(sharpness, 4),
         "score": _quality_score(geometry["area"], orb["keypoints"], vein_density, sharpness),
     }
+    validation = _capture_validation(geometry, quality)
+    quality["validation"] = validation
+    if not validation["valid"]:
+        raise ValueError(f"Capture biométrique invalide: {validation['reason']}")
 
     profile = {
         "schema_version": "3.0",
@@ -429,11 +495,17 @@ def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, An
         component_weights[name] * score
         for name, score in available_components.items()
     ) / max(active_weight, 1e-6)
+    live_quality = live_profile["palmprint"].get("quality", {})
+    live_validation = live_quality.get("validation", {})
+    quality_gate_passed = live_validation.get("valid", True) and live_quality.get("score", 0.0) >= config.MIN_CAPTURE_QUALITY
+    score_gate_passed = palm_score <= config.MATCH_THRESHOLD
 
     return {
-        "match": palm_score <= config.MATCH_THRESHOLD,
+        "match": bool(quality_gate_passed and score_gate_passed),
         "score": round(float(palm_score), 4),
         "threshold": config.MATCH_THRESHOLD,
+        "quality_gate_passed": quality_gate_passed,
+        "quality_reason": live_validation.get("reason"),
         "components": {
             "geometry": round(float(geometry_score), 4),
             "hu": round(float(hu_score), 4),
@@ -445,8 +517,7 @@ def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, An
     }
 
 
-def verify_multimodal(frame_bgr: np.ndarray, stored_profile: dict) -> dict[str, Any]:
-    live_profile = build_multimodal_profile(frame_bgr)
+def verify_live_profile(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> dict[str, Any]:
     candidates = [stored_profile]
     candidates.extend(stored_profile.get("samples") or [])
 
@@ -456,13 +527,17 @@ def verify_multimodal(frame_bgr: np.ndarray, stored_profile: dict) -> dict[str, 
         scored_candidates.append((comparison["score"], index, candidate, comparison))
 
     best_score, best_index, _, best_result = min(scored_candidates, key=lambda item: item[0])
-
     return {
         **best_result,
         "score": round(float(best_score), 4),
         "matched_sample_index": best_index,
         "live_profile": live_profile,
     }
+
+
+def verify_multimodal(frame_bgr: np.ndarray, stored_profile: dict) -> dict[str, Any]:
+    live_profile = build_multimodal_profile(frame_bgr)
+    return verify_live_profile(live_profile, stored_profile)
 
 
 def load_local_templates(path: str | Path = config.TEMPLATE_FILE) -> dict[str, Any]:
