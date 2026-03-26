@@ -20,7 +20,6 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, GRADIENTS } from '../theme';
-import { getAppErrorMessage } from '../services/appErrors';
 import { useMqttStore } from '../store/mqttStore';
 import { MQTT_TOPICS } from '../config';
 
@@ -122,12 +121,12 @@ export default function VeinScanBiometrics({ navigation }) {
             navigation?.navigate('AccessDecision', { event: response.event });
           } else {
             startCameraPreview('scan').catch(() => {});
-            Alert.alert(t('veinScan.scanErrorTitle'), getAppErrorMessage(t, response?.reason, 'veinScan.scanErrorDesc'));
+            Alert.alert(t('veinScan.scanErrorTitle'), t('veinScan.identificationFailedDesc'));
           }
         } catch (error) {
           startCameraPreview('scan').catch(() => {});
           setScanning(false);
-          Alert.alert(t('veinScan.scanErrorTitle'), getAppErrorMessage(t, error, 'veinScan.scanErrorDesc'));
+          Alert.alert(t('veinScan.scanErrorTitle'), t('veinScan.identificationFailedDesc'));
           return;
         }
         setScanning(false);

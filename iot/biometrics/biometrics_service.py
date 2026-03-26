@@ -454,6 +454,33 @@ def build_enrollment_profile(frames_bgr: list[np.ndarray]) -> dict[str, Any]:
     return fused
 
 
+def build_identification_profile(frames_bgr: list[np.ndarray]) -> dict[str, Any]:
+    samples = []
+    rejected_samples = []
+    for index, frame in enumerate(frames_bgr, start=1):
+        try:
+            samples.append(build_multimodal_profile(frame, mode="scan"))
+        except Exception as exc:
+            rejected_samples.append({"sample_index": index, "reason": str(exc)})
+
+    if not samples:
+        raise ValueError("Aucune capture exploitable pour l'identification.")
+
+    if len(samples) == 1:
+        fused = dict(samples[0])
+    else:
+        fused = _merge_samples(samples)
+
+    fused["samples"] = samples
+    fused["sample_count"] = len(samples)
+    fused["captured_frame_count"] = len(frames_bgr)
+    fused["rejected_samples"] = rejected_samples
+    fused["fusion_mode"] = "multiframe_weighted_scan"
+    fused["sample_keys"] = [sample["biometric_key"] for sample in samples]
+    fused["biometric_key"] = hashlib.sha256("|".join(fused["sample_keys"]).encode("utf-8")).hexdigest()
+    return fused
+
+
 def _relative_score(value_a: float, value_b: float) -> float:
     denominator = max(abs(value_b), 1e-6)
     return abs(value_a - value_b) / denominator
@@ -576,6 +603,57 @@ def verify_live_profile(live_profile: dict[str, Any], stored_profile: dict[str, 
         "score": round(float(best_score), 4),
         "matched_sample_index": best_index,
         "live_profile": live_profile,
+    }
+
+
+def _average_components(results: list[dict[str, Any]]) -> dict[str, float | None]:
+    component_names = ("geometry", "hu", "orb", "histogram", "descriptor", "vein_density")
+    averaged = {}
+    for name in component_names:
+        values = [result["components"].get(name) for result in results if result.get("components", {}).get(name) is not None]
+        averaged[name] = round(float(np.mean(np.array(values, dtype=np.float32))), 4) if values else None
+    return averaged
+
+
+def verify_multiframe(frames_bgr: list[np.ndarray], stored_profile: dict[str, Any]) -> dict[str, Any]:
+    live_profile = build_identification_profile(frames_bgr)
+    sample_results = [verify_live_profile(sample, stored_profile) for sample in live_profile["samples"]]
+    fused_result = verify_live_profile(live_profile, stored_profile)
+
+    ranked_results = sorted([fused_result, *sample_results], key=lambda item: item["score"])
+    best_result = ranked_results[0]
+    top_results = ranked_results[: min(2, len(ranked_results))]
+    top_mean = float(np.mean(np.array([result["score"] for result in top_results], dtype=np.float32)))
+    combined_score = round(float(0.45 * fused_result["score"] + 0.35 * best_result["score"] + 0.20 * top_mean), 4)
+    quality_gate_passed = any(result.get("quality_gate_passed") for result in ranked_results)
+    score_gate_passed = combined_score <= config.MATCH_THRESHOLD
+
+    return {
+        "match": bool(quality_gate_passed and score_gate_passed),
+        "score": combined_score,
+        "threshold": config.MATCH_THRESHOLD,
+        "quality_gate_passed": quality_gate_passed,
+        "quality_reason": best_result.get("quality_reason"),
+        "components": _average_components([fused_result, *top_results]),
+        "live_profile": live_profile,
+        "matched_sample_index": best_result.get("matched_sample_index"),
+        "sample_results": [
+            {
+                "score": result["score"],
+                "quality_gate_passed": result.get("quality_gate_passed"),
+                "matched_sample_index": result.get("matched_sample_index"),
+            }
+            for result in sample_results
+        ],
+        "fusion": {
+            "fused_score": fused_result["score"],
+            "best_score": best_result["score"],
+            "top_mean_score": round(top_mean, 4),
+            "strategy": "0.45*fused + 0.35*best + 0.20*top_mean",
+        },
+        "valid_sample_count": live_profile["sample_count"],
+        "captured_frame_count": live_profile["captured_frame_count"],
+        "rejected_samples": live_profile["rejected_samples"],
     }
 
 

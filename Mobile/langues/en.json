@@ -328,6 +328,9 @@
     "enrollmentStartedDesc": "The Raspberry Pi is now waiting for the palm and finger positioning. Follow the LCD instructions.",
     "offlineTitle": "System offline",
     "offlineDesc": "Unable to reach the Raspberry Pi gateway over MQTT.",
+    "scanErrorTitle": "Error",
+    "scanErrorDesc": "The biometric scan could not be started.",
+    "identificationFailedDesc": "Identification failed, please try again.",
     "consentRequiredTitle": "Consent required",
     "consentRequiredDesc": "Biometric processing consent is required.",
     "enrollmentErrorDesc": "Unable to send the enrollment request."

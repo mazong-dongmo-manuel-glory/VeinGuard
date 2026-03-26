@@ -12,7 +12,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import config
 import database
-from biometrics.biometrics_service import build_enrollment_profile, verify_live_profile
+from biometrics.biometrics_service import build_enrollment_profile, verify_multiframe
 from cloud.firebase_service import FirebaseService
 from core.security_controller import SecurityController
 
@@ -98,14 +98,32 @@ class BioGuardMQTTGateway:
 
         try:
             self.controller.handle_scanning()
-            self._publish_preview_frames(frame_count=4, interval_seconds=0.18)
-            try:
+            scan_frames = []
+            last_capture = None
+            for sample_index in range(1, config.IDENTIFICATION_SAMPLE_COUNT + 1):
+                self.publish_status(
+                    "ONLINE",
+                    phase="IDENTIFICATION",
+                    sample_index=sample_index,
+                    sample_count=config.IDENTIFICATION_SAMPLE_COUNT,
+                )
+                self.controller.lcd.show_message(
+                    f"Scan {sample_index}/{config.IDENTIFICATION_SAMPLE_COUNT}",
+                    "Ne bouge pas",
+                )
+                self._publish_preview_frames(frame_count=2, interval_seconds=0.12)
                 capture = self.controller.capture_attempt(
                     claimed_user_id=user_id,
+                    persist_preview=False,
+                    precompute_profile=False,
                     activate_mode=False,
                 )
+                scan_frames.append(capture["frame"])
+                last_capture = capture
                 self._publish_telemetry_payload(capture["telemetry"])
-            except Exception as exc:
+                time.sleep(0.15)
+            if not scan_frames:
+                exc = ValueError("Aucune capture exploitable pour l'identification.")
                 self.controller.handle_access_denied("Main absente")
                 self._record_access(
                     user_id=user_id,
@@ -126,16 +144,18 @@ class BioGuardMQTTGateway:
             if user_id:
                 stored_profile = database.get_biometric_profile(user_id) or self.firebase.get_biometric_profile(user_id)
                 if stored_profile:
+                    result = verify_multiframe(scan_frames, stored_profile)
                     matched_user = {
                         "user_id": user_id,
                         "username": data.get("username") or user_id,
                         "profile": stored_profile,
+                        "prefetched_result": result,
                     }
             else:
                 candidates = database.list_biometric_profiles()
                 best_candidate = None
                 for candidate in candidates:
-                    result = verify_live_profile(capture["profile"], candidate["profile"])
+                    result = verify_multiframe(scan_frames, candidate["profile"])
                     if best_candidate is None or result["score"] < best_candidate["result"]["score"]:
                         best_candidate = {"candidate": candidate, "result": result}
                 if best_candidate and best_candidate["result"]["match"]:
@@ -155,12 +175,15 @@ class BioGuardMQTTGateway:
                     score=None,
                     reason="PROFILE_NOT_FOUND" if user_id else "NO_MATCH_FOUND",
                     method="multimodal_scan",
-                    modalities={"telemetry": capture["telemetry"]},
+                    modalities={
+                        "telemetry": last_capture["telemetry"] if last_capture else None,
+                        "captured_frame_count": len(scan_frames),
+                    },
                 )
                 self.client.publish(response_topic, json.dumps({"status": "fail", "reason": "PROFILE_NOT_FOUND" if user_id else "NO_MATCH_FOUND"}))
                 return
 
-            result = matched_user.get("prefetched_result") or verify_live_profile(capture["profile"], matched_user["profile"])
+            result = matched_user.get("prefetched_result") or verify_multiframe(scan_frames, matched_user["profile"])
             if result["match"]:
                 self.controller.handle_access_granted(matched_user["username"], result["score"])
                 status = "GRANTED"
@@ -183,8 +206,11 @@ class BioGuardMQTTGateway:
                     "quality": result["live_profile"]["palmprint"].get("quality"),
                     "quality_gate_passed": result.get("quality_gate_passed"),
                     "quality_reason": result.get("quality_reason"),
-                    "telemetry": capture["telemetry"],
-                    "preview_path": capture["preview_path"],
+                    "telemetry": last_capture["telemetry"] if last_capture else None,
+                    "captured_frame_count": result.get("captured_frame_count"),
+                    "valid_sample_count": result.get("valid_sample_count"),
+                    "rejected_samples": result.get("rejected_samples"),
+                    "fusion": result.get("fusion"),
                 },
             )
 
