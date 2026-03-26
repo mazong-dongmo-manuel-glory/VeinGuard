@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from pathlib import Path
+from typing import Any, Callable
 
 from werkzeug.security import generate_password_hash
 
@@ -10,13 +12,32 @@ import config
 
 
 DB_PATH = Path(config.LOCAL_CACHE_DB)
+DB_TIMEOUT_SECONDS = 30.0
+_DB_WRITE_LOCK = threading.RLock()
 
 
 def get_db_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=DB_TIMEOUT_SECONDS, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 30000")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
     return conn
+
+
+def _run_write(operation: Callable[[sqlite3.Connection], Any]) -> Any:
+    with _DB_WRITE_LOCK:
+        conn = get_db_connection()
+        try:
+            result = operation(conn)
+            conn.commit()
+            return result
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
 
 def _ensure_column(cur: sqlite3.Cursor, table: str, column: str, ddl: str) -> None:
@@ -27,119 +48,118 @@ def _ensure_column(cur: sqlite3.Cursor, table: str, column: str, ddl: str) -> No
 
 
 def init_db() -> None:
-    conn = get_db_connection()
-    cur = conn.cursor()
+    def operation(conn: sqlite3.Connection) -> None:
+        cur = conn.cursor()
 
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT DEFAULT '',
-            password_hash TEXT NOT NULL,
-            role TEXT DEFAULT 'operator',
-            department TEXT DEFAULT '',
-            firebase_uid TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS biometric_profiles (
-            user_id TEXT PRIMARY KEY,
-            profile_json TEXT NOT NULL,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-        )
-        """
-    )
-
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS access_events (
-            id TEXT PRIMARY KEY,
-            user_id TEXT,
-            username TEXT,
-            status TEXT NOT NULL,
-            score REAL,
-            reason TEXT,
-            method TEXT NOT NULL,
-            modalities TEXT,
-            synced INTEGER DEFAULT 0,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS audit_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            level TEXT NOT NULL,
-            title TEXT NOT NULL,
-            description TEXT NOT NULL,
-            meta TEXT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS device_state (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-
-    _ensure_column(cur, "users", "email", "email TEXT DEFAULT ''")
-
-    cur.execute("SELECT 1 FROM users WHERE username = ?", ("admin@bioguard.local",))
-    if not cur.fetchone():
         cur.execute(
             """
-            INSERT INTO users (id, username, email, password_hash, role, department)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "admin-001",
-                "admin@bioguard.local",
-                "admin@bioguard.local",
-                generate_password_hash("Admin1234!", method="pbkdf2:sha256"),
-                "admin",
-                "Security",
-            ),
-        )
-
-    cur.execute("SELECT COUNT(*) AS total FROM audit_logs")
-    if cur.fetchone()["total"] == 0:
-        cur.executemany(
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT DEFAULT '',
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'operator',
+                department TEXT DEFAULT '',
+                firebase_uid TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
             """
-            INSERT INTO audit_logs (level, title, description, meta)
-            VALUES (?, ?, ?, ?)
-            """,
-            [
-                (
-                    "INFO",
-                    "SYSTEM_BOOTSTRAP",
-                    "Initialisation du cache edge et de la passerelle MQTT.",
-                    config.DEVICE_ID,
-                ),
-                (
-                    "INFO",
-                    "PROJECT_PIVOT",
-                    "Migration du projet vers la reconnaissance multimodale paume/doigts.",
-                    config.APP_NAME,
-                ),
-            ],
         )
 
-    conn.commit()
-    conn.close()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS biometric_profiles (
+                user_id TEXT PRIMARY KEY,
+                profile_json TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            )
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS access_events (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                username TEXT,
+                status TEXT NOT NULL,
+                score REAL,
+                reason TEXT,
+                method TEXT NOT NULL,
+                modalities TEXT,
+                synced INTEGER DEFAULT 0,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                level TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                meta TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS device_state (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        _ensure_column(cur, "users", "email", "email TEXT DEFAULT ''")
+
+        cur.execute("SELECT 1 FROM users WHERE username = ?", ("admin@bioguard.local",))
+        if not cur.fetchone():
+            cur.execute(
+                """
+                INSERT INTO users (id, username, email, password_hash, role, department)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "admin-001",
+                    "admin@bioguard.local",
+                    "admin@bioguard.local",
+                    generate_password_hash("Admin1234!", method="pbkdf2:sha256"),
+                    "admin",
+                    "Security",
+                ),
+            )
+
+        cur.execute("SELECT COUNT(*) AS total FROM audit_logs")
+        if cur.fetchone()["total"] == 0:
+            cur.executemany(
+                """
+                INSERT INTO audit_logs (level, title, description, meta)
+                VALUES (?, ?, ?, ?)
+                """,
+                [
+                    (
+                        "INFO",
+                        "SYSTEM_BOOTSTRAP",
+                        "Initialisation du cache edge et de la passerelle MQTT.",
+                        config.DEVICE_ID,
+                    ),
+                    (
+                        "INFO",
+                        "PROJECT_PIVOT",
+                        "Migration du projet vers la reconnaissance multimodale paume/doigts.",
+                        config.APP_NAME,
+                    ),
+                ],
+            )
+
+    _run_write(operation)
 
 
 def upsert_user(
@@ -150,43 +170,38 @@ def upsert_user(
     department: str = "",
     email: str = "",
 ) -> None:
-    conn = get_db_connection()
-    conn.execute(
-        """
-        INSERT INTO users (id, username, email, password_hash, role, department)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-            username = excluded.username,
-            email = excluded.email,
-            password_hash = excluded.password_hash,
-            role = excluded.role,
-            department = excluded.department
-        """,
-        (user_id, username, email, password_hash, role, department),
+    _run_write(
+        lambda conn: conn.execute(
+            """
+            INSERT INTO users (id, username, email, password_hash, role, department)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                username = excluded.username,
+                email = excluded.email,
+                password_hash = excluded.password_hash,
+                role = excluded.role,
+                department = excluded.department
+            """,
+            (user_id, username, email, password_hash, role, department),
+        )
     )
-    conn.commit()
-    conn.close()
 
 
 def update_user(user_id: str, username: str, role: str, department: str = "", email: str = "") -> None:
-    conn = get_db_connection()
-    conn.execute(
-        """
-        UPDATE users
-        SET username = ?, email = ?, role = ?, department = ?
-        WHERE id = ?
-        """,
-        (username, email, role, department, user_id),
+    _run_write(
+        lambda conn: conn.execute(
+            """
+            UPDATE users
+            SET username = ?, email = ?, role = ?, department = ?
+            WHERE id = ?
+            """,
+            (username, email, role, department, user_id),
+        )
     )
-    conn.commit()
-    conn.close()
 
 
 def delete_user(user_id: str) -> None:
-    conn = get_db_connection()
-    conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
-    conn.commit()
-    conn.close()
+    _run_write(lambda conn: conn.execute("DELETE FROM users WHERE id = ?", (user_id,)))
 
 
 def get_user_by_id(user_id: str) -> dict | None:
@@ -226,19 +241,18 @@ def generate_user_id(prefix: str = "BG-USER") -> str:
 
 
 def save_biometric_profile(user_id: str, profile: dict) -> None:
-    conn = get_db_connection()
-    conn.execute(
-        """
-        INSERT INTO biometric_profiles (user_id, profile_json, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(user_id) DO UPDATE SET
-            profile_json = excluded.profile_json,
-            updated_at = CURRENT_TIMESTAMP
-        """,
-        (user_id, json.dumps(profile, ensure_ascii=False)),
+    _run_write(
+        lambda conn: conn.execute(
+            """
+            INSERT INTO biometric_profiles (user_id, profile_json, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id) DO UPDATE SET
+                profile_json = excluded.profile_json,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (user_id, json.dumps(profile, ensure_ascii=False)),
+        )
     )
-    conn.commit()
-    conn.close()
 
 
 def get_biometric_profile(user_id: str) -> dict | None:
@@ -286,27 +300,26 @@ def log_access_event(
     modalities: dict,
     synced: bool = False,
 ) -> None:
-    conn = get_db_connection()
-    conn.execute(
-        """
-        INSERT INTO access_events (
-            id, user_id, username, status, score, reason, method, modalities, synced
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            event_id,
-            user_id,
-            username,
-            status,
-            score,
-            reason,
-            method,
-            json.dumps(modalities, ensure_ascii=False),
-            int(synced),
-        ),
+    _run_write(
+        lambda conn: conn.execute(
+            """
+            INSERT INTO access_events (
+                id, user_id, username, status, score, reason, method, modalities, synced
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event_id,
+                user_id,
+                username,
+                status,
+                score,
+                reason,
+                method,
+                json.dumps(modalities, ensure_ascii=False),
+                int(synced),
+            ),
+        )
     )
-    conn.commit()
-    conn.close()
 
 
 def list_access_events(limit: int = 50) -> list[dict]:
@@ -346,33 +359,31 @@ def list_audit_logs(limit: int = 50) -> list[dict]:
 
 
 def log_audit(level: str, title: str, description: str, meta: str = "") -> None:
-    conn = get_db_connection()
-    conn.execute(
-        """
-        INSERT INTO audit_logs (level, title, description, meta)
-        VALUES (?, ?, ?, ?)
-        """,
-        (level, title, description, meta),
+    _run_write(
+        lambda conn: conn.execute(
+            """
+            INSERT INTO audit_logs (level, title, description, meta)
+            VALUES (?, ?, ?, ?)
+            """,
+            (level, title, description, meta),
+        )
     )
-    conn.commit()
-    conn.close()
 
 
 def update_device_state(key: str, value: dict | str) -> None:
     serialized = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
-    conn = get_db_connection()
-    conn.execute(
-        """
-        INSERT INTO device_state (key, value, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(key) DO UPDATE SET
-            value = excluded.value,
-            updated_at = CURRENT_TIMESTAMP
-        """,
-        (key, serialized),
+    _run_write(
+        lambda conn: conn.execute(
+            """
+            INSERT INTO device_state (key, value, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (key, serialized),
+        )
     )
-    conn.commit()
-    conn.close()
 
 
 if __name__ == "__main__":
