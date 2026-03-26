@@ -31,6 +31,10 @@ def _save_base64_image(image_base64: str, path: str | Path) -> str:
     return str(target)
 
 
+def save_debug_processed_image(image_base64: str, path: str | Path) -> str:
+    return _save_base64_image(image_base64, path)
+
+
 def _create_clahe() -> cv2.CLAHE:
     grid = max(2, int(config.NOIR_CLAHE_GRID_SIZE))
     return cv2.createCLAHE(
@@ -381,11 +385,11 @@ def _normalize_palm_roi(
     span = float(np.hypot(right_r[0] - left_r[0], right_r[1] - left_r[1]))
     if span < 18.0:
         raise ValueError("Alignement palmaire impossible: points anatomiques instables.")
-
-    crop_width = int(max(span * config.PALM_ROI_WIDTH_RATIO, 64))
-    crop_height = int(max(span * config.PALM_ROI_HEIGHT_RATIO, 80))
-    crop_center_x = (left_r[0] + right_r[0]) / 2.0
-    crop_center_y = (left_r[1] + right_r[1]) / 2.0 + (span * 0.92)
+    rb_x, rb_y, rb_w, rb_h = cv2.boundingRect(rotated_contour)
+    crop_width = int(max(rb_w * config.PALM_ROI_WIDTH_RATIO, 96))
+    crop_height = int(max(rb_h * config.PALM_ROI_HEIGHT_RATIO, 120))
+    crop_center_x = rb_x + (rb_w / 2.0)
+    crop_center_y = rb_y + (rb_h / 2.0)
     x1 = max(int(crop_center_x - (crop_width / 2.0)), 0)
     y1 = max(int(crop_center_y - (crop_height / 2.0)), 0)
     x2 = min(x1 + crop_width, rotated_gray.shape[1])
@@ -398,7 +402,7 @@ def _normalize_palm_roi(
         x2,
         y2,
         angle,
-        "valley_alignment",
+        "whole_hand_alignment",
         [list(left), list(right)],
     )
     mask_fill_ratio = np.count_nonzero(normalized["normalized_mask"]) / float(max(normalized["normalized_mask"].size, 1))
@@ -406,10 +410,10 @@ def _normalize_palm_roi(
         normalized["rotated_contour"] = rotated_contour
         return normalized
 
-    fallback_x = max(int(x - w * 0.10), 0)
-    fallback_y = max(int(y + h * 0.12), 0)
-    fallback_w = min(int(w * 1.20), gray_frame.shape[1] - fallback_x)
-    fallback_h = min(int(h * 0.78), gray_frame.shape[0] - fallback_y)
+    fallback_x = max(int(x - w * 0.18), 0)
+    fallback_y = max(int(y - h * 0.12), 0)
+    fallback_w = min(int(w * 1.36), gray_frame.shape[1] - fallback_x)
+    fallback_h = min(int(h * 1.22), gray_frame.shape[0] - fallback_y)
     fallback = build_from_crop(
         gray_frame,
         hand_mask,
@@ -1090,7 +1094,7 @@ def _compare_legacy_profiles(live_profile: dict[str, Any], stored_profile: dict[
         hu_score = 1.0
 
     texture_score = _relative_score(_profile_texture_density(live_profile), _profile_texture_density(stored_profile))
-    palm_score = float(0.45 * geometry_score + 0.30 * hu_score + 0.20 * histogram_score + 0.05 * texture_score)
+    palm_score = float(0.18 * geometry_score + 0.22 * hu_score + 0.48 * histogram_score + 0.12 * texture_score)
     live_quality = live_profile["palmprint"].get("quality", {})
     live_validation = live_quality.get("validation", {})
     quality_gate_passed = live_validation.get("valid", True) and live_quality.get("score", 0.0) >= config.MIN_CAPTURE_QUALITY
@@ -1144,11 +1148,11 @@ def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, An
     )
 
     palm_score = float(
-        0.68 * orientation_score
-        + 0.16 * histogram_score
-        + 0.10 * geometry_score
+        0.78 * orientation_score
+        + 0.14 * histogram_score
+        + 0.03 * geometry_score
         + 0.04 * texture_score
-        + 0.02 * alignment_score
+        + 0.01 * alignment_score
     )
 
     live_quality = live_profile["palmprint"].get("quality", {})

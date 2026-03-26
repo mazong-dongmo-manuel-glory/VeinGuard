@@ -6,6 +6,7 @@ import socket
 import time
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 import paho.mqtt.client as mqtt
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -14,6 +15,7 @@ import config
 import database
 from biometrics.biometrics_service import (
     build_enrollment_profile,
+    save_debug_processed_image,
     verify_identification_profile,
 )
 from cloud.firebase_service import FirebaseService
@@ -99,6 +101,7 @@ class BioGuardMQTTGateway:
         response_topic = config.response_topic("access/scan", client_id)
         user_id = data.get("user_id")
         best_candidate_info = None
+        processed_image_path = None
 
         try:
             self.controller.handle_scanning()
@@ -117,6 +120,11 @@ class BioGuardMQTTGateway:
                     activate_mode=False,
                 )
                 last_capture = capture
+                processed_base64 = capture["telemetry"].get("camera", {}).get("processed_jpeg_base64")
+                if processed_base64:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    processed_path = Path(config.CAPTURE_DIR) / f"{user_id or 'scan'}_processed_scan_{timestamp}.jpg"
+                    processed_image_path = save_debug_processed_image(processed_base64, processed_path)
                 self._publish_telemetry_payload(capture["telemetry"])
                 live_identification_profile = capture["profile"]
             except Exception as exc:
@@ -131,6 +139,7 @@ class BioGuardMQTTGateway:
                     modalities={
                         "error": str(exc),
                         "captured_frame_count": 1,
+                        "processed_image_path": processed_image_path,
                         "telemetry": last_capture["telemetry"] if 'last_capture' in locals() and last_capture else None,
                     },
                 )
@@ -190,6 +199,7 @@ class BioGuardMQTTGateway:
                         "telemetry": last_capture["telemetry"] if last_capture else None,
                         "captured_frame_count": 1,
                         "best_candidate": best_candidate_info,
+                        "processed_image_path": processed_image_path,
                     },
                 )
                 self.client.publish(
@@ -231,6 +241,7 @@ class BioGuardMQTTGateway:
                     "quality_gate_passed": result.get("quality_gate_passed"),
                     "quality_reason": result.get("quality_reason"),
                     "telemetry": last_capture["telemetry"] if last_capture else None,
+                    "processed_image_path": processed_image_path,
                     "captured_frame_count": result.get("captured_frame_count"),
                     "valid_sample_count": result.get("valid_sample_count"),
                     "rejected_samples": result.get("rejected_samples"),
@@ -252,6 +263,7 @@ class BioGuardMQTTGateway:
                 "quality": result["live_profile"]["palmprint"].get("quality"),
                 "components": result["components"],
                 "best_candidate": best_candidate_info,
+                "processed_image_path": processed_image_path,
                 "event": event,
             }
             self.client.publish(response_topic, json.dumps(response))
