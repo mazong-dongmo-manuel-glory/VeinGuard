@@ -76,7 +76,7 @@ LIGHT_SENSOR_SAMPLES = int(os.getenv("VG_LIGHT_SENSOR_SAMPLES", "5"))
 LIGHT_SENSOR_DARK_RATIO = float(os.getenv("VG_LIGHT_SENSOR_DARK_RATIO", "1.25"))
 
 # Biometrics
-MATCH_THRESHOLD = float(os.getenv("VG_MATCH_THRESHOLD", "0.30"))
+MATCH_THRESHOLD = float(os.getenv("VG_MATCH_THRESHOLD", "0.10"))
 MIN_HAND_AREA = int(os.getenv("VG_MIN_HAND_AREA", "3500"))
 CAMERA_WIDTH = int(os.getenv("VG_CAMERA_WIDTH", "640"))
 CAMERA_HEIGHT = int(os.getenv("VG_CAMERA_HEIGHT", "480"))
