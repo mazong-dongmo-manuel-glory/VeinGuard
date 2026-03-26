@@ -387,28 +387,48 @@ def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, An
     live_orb = np.array(live_profile["palmprint"]["orb_signature"], dtype=np.float32)
     ref_orb = np.array(stored_profile["palmprint"]["orb_signature"], dtype=np.float32)
     orb_score = float(np.mean(np.abs(live_orb - ref_orb) / 255.0))
+    component_weights = {
+        "geometry": 0.28,
+        "hu": 0.18,
+        "orb": 0.18,
+        "histogram": 0.16,
+        "descriptor": 0.14,
+        "vein_density": 0.06,
+    }
+    available_components = {
+        "geometry": geometry_score,
+        "hu": hu_score,
+        "orb": orb_score,
+    }
 
-    live_hist = np.array(live_profile["palmprint"]["intensity_histogram"], dtype=np.float32)
-    ref_hist = np.array(stored_profile["palmprint"]["intensity_histogram"], dtype=np.float32)
-    histogram_score = float(np.mean(np.abs(live_hist - ref_hist)))
+    live_hist = live_profile["palmprint"].get("intensity_histogram")
+    ref_hist = stored_profile["palmprint"].get("intensity_histogram")
+    histogram_score = None
+    if live_hist and ref_hist:
+        live_hist_arr = np.array(live_hist, dtype=np.float32)
+        ref_hist_arr = np.array(ref_hist, dtype=np.float32)
+        histogram_score = float(np.mean(np.abs(live_hist_arr - ref_hist_arr)))
+        available_components["histogram"] = histogram_score
 
-    descriptor_score = _descriptor_match_score(
-        live_profile["palmprint"].get("descriptor_rows", []),
-        stored_profile["palmprint"].get("descriptor_rows", []),
-    )
-    density_score = _relative_score(
-        live_profile["vein_pattern"]["density"],
-        stored_profile["vein_pattern"]["density"],
-    )
+    live_rows = live_profile["palmprint"].get("descriptor_rows", [])
+    ref_rows = stored_profile["palmprint"].get("descriptor_rows", [])
+    descriptor_score = None
+    if live_rows and ref_rows:
+        descriptor_score = _descriptor_match_score(live_rows, ref_rows)
+        available_components["descriptor"] = descriptor_score
 
-    palm_score = (
-        0.28 * geometry_score
-        + 0.18 * hu_score
-        + 0.18 * orb_score
-        + 0.16 * histogram_score
-        + 0.14 * descriptor_score
-        + 0.06 * density_score
-    )
+    live_density = live_profile.get("vein_pattern", {}).get("density")
+    ref_density = stored_profile.get("vein_pattern", {}).get("density")
+    density_score = None
+    if live_density is not None and ref_density is not None:
+        density_score = _relative_score(live_density, ref_density)
+        available_components["vein_density"] = density_score
+
+    active_weight = sum(component_weights[name] for name in available_components)
+    palm_score = sum(
+        component_weights[name] * score
+        for name, score in available_components.items()
+    ) / max(active_weight, 1e-6)
 
     return {
         "match": palm_score <= config.MATCH_THRESHOLD,
@@ -418,9 +438,9 @@ def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, An
             "geometry": round(float(geometry_score), 4),
             "hu": round(float(hu_score), 4),
             "orb": round(float(orb_score), 4),
-            "histogram": round(float(histogram_score), 4),
-            "descriptor": round(float(descriptor_score), 4),
-            "vein_density": round(float(density_score), 4),
+            "histogram": round(float(histogram_score), 4) if histogram_score is not None else None,
+            "descriptor": round(float(descriptor_score), 4) if descriptor_score is not None else None,
+            "vein_density": round(float(density_score), 4) if density_score is not None else None,
         },
     }
 
