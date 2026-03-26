@@ -18,11 +18,12 @@ const EMAIL_KEY = 'auth_email';
 const PASSWORD_KEY = 'auth_password';
 
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+let authSubscription = null;
 
 export const useAuthStore = create((set, get) => ({
   user: null,
   authReady: false,
-  rememberSession: false,
+  rememberSession: true,
   preferences: getDefaultPreferences(),
 
   bootstrap: async () => {
@@ -31,23 +32,10 @@ export const useAuthStore = create((set, get) => ({
       return;
     }
 
-    const rememberSession = (await AsyncStorage.getItem(REMEMBER_KEY)) === '1';
-    set({ rememberSession });
+    const rememberSession = (await AsyncStorage.getItem(REMEMBER_KEY)) !== '0';
+    set({ rememberSession, authReady: false });
 
-    let resolved = false;
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      const preferences = user ? await loadUserPreferences(user.uid) : getDefaultPreferences();
-      set({
-        user,
-        authReady: true,
-        preferences,
-      });
-      resolved = true;
-      unsubscribe();
-    });
-
-    const currentUser = auth.currentUser;
-    if (!currentUser && rememberSession) {
+    if (!auth.currentUser && rememberSession) {
       const email = await SecureStore.getItemAsync(EMAIL_KEY);
       const password = await SecureStore.getItemAsync(PASSWORD_KEY);
       if (email && password) {
@@ -61,13 +49,25 @@ export const useAuthStore = create((set, get) => ({
       }
     }
 
-    setTimeout(async () => {
-      if (!resolved) {
-        const fallbackUser = auth.currentUser;
-        const preferences = fallbackUser ? await loadUserPreferences(fallbackUser.uid) : getDefaultPreferences();
-        set({ user: fallbackUser, authReady: true, preferences });
-      }
-    }, 1200);
+    if (!authSubscription) {
+      authSubscription = onAuthStateChanged(auth, async (user) => {
+        const preferences = user ? await loadUserPreferences(user.uid) : getDefaultPreferences();
+        set({
+          user,
+          authReady: true,
+          preferences,
+        });
+      });
+    }
+
+    const fallbackUser = auth.currentUser;
+    const preferences = fallbackUser ? await loadUserPreferences(fallbackUser.uid) : getDefaultPreferences();
+    set({
+      user: fallbackUser,
+      authReady: true,
+      preferences,
+      rememberSession,
+    });
   },
 
   login: async ({ email, password, rememberSession }) => {
@@ -77,14 +77,15 @@ export const useAuthStore = create((set, get) => ({
 
     const normalizedEmail = normalizeEmail(email);
     const normalizedPassword = String(password || '');
+    const shouldRemember = rememberSession !== false;
     const credential = await signInWithEmailAndPassword(auth, normalizedEmail, normalizedPassword);
 
-    if (rememberSession) {
+    if (shouldRemember) {
       await AsyncStorage.setItem(REMEMBER_KEY, '1');
       await SecureStore.setItemAsync(EMAIL_KEY, normalizedEmail);
       await SecureStore.setItemAsync(PASSWORD_KEY, normalizedPassword);
     } else {
-      await AsyncStorage.removeItem(REMEMBER_KEY);
+      await AsyncStorage.setItem(REMEMBER_KEY, '0');
       await SecureStore.deleteItemAsync(EMAIL_KEY);
       await SecureStore.deleteItemAsync(PASSWORD_KEY);
     }
@@ -92,7 +93,7 @@ export const useAuthStore = create((set, get) => ({
     const preferences = await loadUserPreferences(credential.user.uid);
     set({
       user: credential.user,
-      rememberSession: !!rememberSession,
+      rememberSession: shouldRemember,
       preferences,
     });
     return credential.user;
@@ -115,7 +116,7 @@ export const useAuthStore = create((set, get) => ({
     if (auth) {
       await signOut(auth);
     }
-    await AsyncStorage.removeItem(REMEMBER_KEY);
+    await AsyncStorage.setItem(REMEMBER_KEY, '0');
     await SecureStore.deleteItemAsync(EMAIL_KEY);
     await SecureStore.deleteItemAsync(PASSWORD_KEY);
     set({

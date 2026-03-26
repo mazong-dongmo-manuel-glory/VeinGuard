@@ -12,8 +12,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import config
 import database
-from biometrics.biometrics_service import build_multimodal_profile, verify_multimodal
-from biometrics.biometrics_service import build_enrollment_profile
+from biometrics.biometrics_service import build_enrollment_profile, verify_multimodal
 from cloud.firebase_service import FirebaseService
 from core.security_controller import SecurityController
 
@@ -181,15 +180,11 @@ class BioGuardMQTTGateway:
     def handle_enroll_command(self, data: dict) -> None:
         client_id = data.get("client_id", "anonymous")
         response_topic = config.response_topic("users/enroll", client_id)
-        user_id = data.get("user_id")
+        user_id = data.get("user_id") or database.generate_user_id()
         username = data.get("username", user_id or "unknown")
         role = data.get("role", "operator")
         department = data.get("department", "")
         password = data.get("password", "Temp1234!")
-
-        if not user_id:
-            self.client.publish(response_topic, json.dumps({"status": "error", "error": "Missing user_id"}))
-            return
 
         self.controller.handle_enrollment(user_id)
 
@@ -197,6 +192,12 @@ class BioGuardMQTTGateway:
         preview_paths = []
         try:
             for index in range(config.ENROLLMENT_SAMPLE_COUNT):
+                self.publish_status(
+                    "ONLINE",
+                    phase="ENROLLMENT",
+                    sample_index=index + 1,
+                    sample_count=config.ENROLLMENT_SAMPLE_COUNT,
+                )
                 self.controller.lcd.show_message(
                     f"Angle {index + 1}/{config.ENROLLMENT_SAMPLE_COUNT}",
                     user_id[: config.LCD_COLS],
@@ -232,7 +233,7 @@ class BioGuardMQTTGateway:
         )
         self.firebase.save_biometric_profile(user_id, profile)
         database.log_audit("INFO", "USER_ENROLLED", f"Profil multimodal cree pour {username}", user_id)
-        self.publish_status("ENROLLMENT_COMPLETED")
+        self.publish_status("ONLINE", phase="ENROLLMENT_COMPLETED", enrolled_user_id=user_id)
 
         self.client.publish(
             response_topic,
@@ -388,7 +389,7 @@ class BioGuardMQTTGateway:
         )
         self.publish_status("SETTINGS_UPDATED")
 
-    def publish_status(self, status: str) -> None:
+    def publish_status(self, status: str, **extra) -> None:
         payload = {
             "status": status,
             "device_id": config.DEVICE_ID,
@@ -398,6 +399,7 @@ class BioGuardMQTTGateway:
             "mqtt_ws_port": config.MQTT_WS_PORT,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+        payload.update(extra)
         self.client.publish(config.MQTT_TOPIC_STATUS, json.dumps(payload))
 
     def publish_telemetry(self) -> None:

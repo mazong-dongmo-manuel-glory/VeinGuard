@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../theme';
 import { useMqttStore } from '../store/mqttStore';
 import { useAuthStore } from '../store/authStore';
+import { useLangueStore } from '../store/langueStore';
 
 function SectionHeader({ icon, title, color = COLORS.neonCyan }) {
   return (
@@ -57,6 +58,8 @@ export default function SystemSetting({ navigation }) {
   const updateBrokerConfig = useMqttStore((state) => state.updateBrokerConfig);
   const preferences = useAuthStore((state) => state.preferences);
   const updatePreferences = useAuthStore((state) => state.updatePreferences);
+  const langue = useLangueStore((state) => state.langue);
+  const modifierLangue = useLangueStore((state) => state.modifierLangue);
 
   const [autoLightEnabled, setAutoLightEnabled] = useState(true);
   const [assistLightsOn, setAssistLightsOn] = useState(false);
@@ -130,6 +133,11 @@ export default function SystemSetting({ navigation }) {
     }
   };
 
+  const handleImmediateToggle = async (setter, payload, successMessage) => {
+    setter(payload[Object.keys(payload)[0]]);
+    await sendSettings(payload, successMessage);
+  };
+
   const applyLightingSettings = async () => {
     await sendSettings({
       auto_light_enabled: autoLightEnabled,
@@ -154,6 +162,10 @@ export default function SystemSetting({ navigation }) {
   const lightingData = telemetry?.lighting;
   const lcdData = telemetry?.lcd;
   const cameraData = telemetry?.camera;
+  const languageOptions = [
+    { value: 'fr', label: t('systemSettings.french') },
+    { value: 'en', label: t('systemSettings.english') },
+  ];
 
   return (
     <View style={styles.screen}>
@@ -244,6 +256,41 @@ export default function SystemSetting({ navigation }) {
         </View>
 
         <View style={styles.card}>
+          <SectionHeader icon="language-outline" title={t('systemSettings.language')} color={COLORS.neonCyan} />
+          <View style={styles.cardContent}>
+            <Text style={styles.helperText}>{t('systemSettings.selectLanguage')}</Text>
+            <Text style={styles.languageCurrent}>
+              {t('systemSettings.currentLanguage')} {langue === 'en' ? t('systemSettings.english') : t('systemSettings.french')}
+            </Text>
+            <View style={styles.languageOptions}>
+              {languageOptions.map((option) => {
+                const active = langue === option.value;
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.languageChip,
+                      active && styles.languageChipActive,
+                    ]}
+                    onPress={() => modifierLangue(option.value)}
+                    activeOpacity={0.85}
+                  >
+                    <Text
+                      style={[
+                        styles.languageChipText,
+                        active && styles.languageChipTextActive,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.card}>
           <SectionHeader icon="globe-outline" title={t('systemSettings.connectionTitle')} color={COLORS.neonCyan} />
           <View style={styles.cardContent}>
             <Text style={styles.helperText}>{t('systemSettings.connectionDesc')}</Text>
@@ -281,7 +328,7 @@ export default function SystemSetting({ navigation }) {
               title={t('systemSettings.assistLightsTitle')}
               description={t('systemSettings.assistLightsDesc')}
               value={assistLightsOn}
-              onValueChange={setAssistLightsOn}
+              onValueChange={(value) => handleImmediateToggle(setAssistLightsOn, { assist_lights_on: value }, t('systemSettings.hardwareCommandSent'))}
               color={COLORS.neonAmber}
             />
             <View style={styles.inputGroup}>
@@ -306,14 +353,14 @@ export default function SystemSetting({ navigation }) {
               title={t('systemSettings.greenLedTitle')}
               description={t('systemSettings.greenLedDesc')}
               value={greenLedOn}
-              onValueChange={setGreenLedOn}
+              onValueChange={(value) => handleImmediateToggle(setGreenLedOn, { green_led_on: value }, t('systemSettings.hardwareCommandSent'))}
               color={COLORS.neonGreen}
             />
             <ToggleRow
               title={t('systemSettings.redLedTitle')}
               description={t('systemSettings.redLedDesc')}
               value={redLedOn}
-              onValueChange={setRedLedOn}
+              onValueChange={(value) => handleImmediateToggle(setRedLedOn, { red_led_on: value }, t('systemSettings.hardwareCommandSent'))}
               color={COLORS.neonRed}
             />
             <TouchableOpacity
@@ -415,6 +462,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   helperText: { color: COLORS.textSecondary, fontSize: 12, lineHeight: 18 },
+  languageCurrent: { color: COLORS.white, fontSize: 12, fontWeight: '700' },
+  languageOptions: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
+  languageChip: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  languageChipActive: {
+    borderColor: COLORS.neonCyan,
+    backgroundColor: 'rgba(0,229,255,0.16)',
+  },
+  languageChipText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  languageChipTextActive: {
+    color: COLORS.neonCyan,
+  },
   primaryBtn: {
     height: 50,
     borderRadius: 12,

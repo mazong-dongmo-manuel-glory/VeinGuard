@@ -10,6 +10,7 @@ import {
   StatusBar,
   Platform,
   Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,13 +18,15 @@ import { BlurView } from 'expo-blur';
 import { COLORS, GRADIENTS } from '../theme';
 import { useMqttStore } from '../store/mqttStore';
 
+const DEPARTMENT_KEYS = ['security', 'operations', 'research', 'it', 'administration'];
+
 function CheckItem({ label, checked, onToggle }) {
   return (
     <TouchableOpacity style={styles.checkRow} onPress={onToggle} activeOpacity={0.7}>
-      <View style={[styles.checkbox, checked && { borderColor: COLORS.neonGreen, backgroundColor: 'rgba(57, 255, 20, 0.1)' }]}>
+      <View style={[styles.checkbox, checked && styles.checkboxActive]}>
         {checked && <Ionicons name="checkmark" size={14} color={COLORS.neonGreen} />}
       </View>
-      <Text style={[styles.checkText, checked && { color: COLORS.white }]}>{label}</Text>
+      <Text style={[styles.checkText, checked && styles.checkTextActive]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -31,8 +34,8 @@ function CheckItem({ label, checked, onToggle }) {
 function StatusIndicator({ label, active }) {
   return (
     <View style={styles.statusItem}>
-      <View style={[styles.statusDot, { backgroundColor: active ? COLORS.neonGreen : 'rgba(255,255,255,0.1)' }]} />
-      <Text style={[styles.statusLabel, active && { color: COLORS.white }]}>{label.toUpperCase()}</Text>
+      <View style={[styles.statusDot, active ? styles.statusDotActive : null]} />
+      <Text style={[styles.statusLabel, active && styles.statusLabelActive]}>{label.toUpperCase()}</Text>
     </View>
   );
 }
@@ -44,20 +47,44 @@ export default function EnrollUser({ navigation, route }) {
   const editingUser = params.user || null;
 
   const [fullName, setFullName] = useState(editingUser?.username || '');
-  const [employeeId, setEmployeeId] = useState(editingUser?.id || '');
+  const [employeeId] = useState(editingUser?.id || '');
   const [email, setEmail] = useState(editingUser?.email || '');
-  const [department, setDepartment] = useState(editingUser?.department || '');
+  const [department, setDepartment] = useState(editingUser?.department || t('enrollment.departments.security'));
   const [notes, setNotes] = useState('');
+  const [departmentMenuOpen, setDepartmentMenuOpen] = useState(false);
 
   const [groupMain, setGroupMain] = useState(true);
   const [groupLab, setGroupLab] = useState(false);
   const [groupServer, setGroupServer] = useState(false);
   const [groupAdmin, setGroupAdmin] = useState(false);
   const [consent, setConsent] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   const isConnected = useMqttStore((state) => state.isConnected);
   const enrollUser = useMqttStore((state) => state.enrollUser);
   const updateUser = useMqttStore((state) => state.updateUser);
+  const telemetry = useMqttStore((state) => state.telemetry);
+  const statusPayload = useMqttStore((state) => state.statusPayload);
+
+  const previewBase64 = telemetry?.camera?.preview_jpeg_base64;
+  const previewUri = previewBase64 ? `data:image/jpeg;base64,${previewBase64}` : null;
+  const currentRole = groupAdmin ? t('enrollment.adminRole') : t('enrollment.operatorRole');
+  const accessGroups = [
+    groupMain && 'main',
+    groupLab && 'lab',
+    groupServer && 'server',
+    groupAdmin && 'admin',
+  ].filter(Boolean);
+
+  const departmentOptions = DEPARTMENT_KEYS.map((key) => ({
+    key,
+    label: t(`enrollment.departments.${key}`),
+  }));
+
+  const enrollmentProgress = statusPayload?.phase === 'ENROLLMENT'
+    ? Number(statusPayload?.sample_index || 0)
+    : 0;
+  const enrollmentTarget = Number(statusPayload?.sample_count || 5);
 
   const handleCompleteEnrollment = async () => {
     if (!isConnected) {
@@ -70,40 +97,44 @@ export default function EnrollUser({ navigation, route }) {
       return;
     }
 
-    if (!fullName.trim() || !employeeId.trim() || !email.trim()) {
-      Alert.alert(t('common.error'), 'Nom, identifiant et e-mail sont obligatoires.');
+    if (!fullName.trim() || !email.trim()) {
+      Alert.alert(t('common.error'), t('enrollment.requiredFieldsDesc'));
       return;
     }
 
     if (!String(email).includes('@')) {
-      Alert.alert(t('common.error'), "L'adresse e-mail n'est pas valide.");
+      Alert.alert(t('common.error'), t('enrollment.invalidEmailDesc'));
       return;
     }
 
+    setSubmitting(true);
     try {
       const payload = {
-        user_id: employeeId.trim(),
+        ...(mode === 'edit' && employeeId ? { user_id: employeeId } : {}),
         username: fullName.trim(),
         password: 'Temp1234!',
         role: groupAdmin ? 'admin' : 'operator',
         email: email.trim(),
         department: department.trim(),
-        images: []
+        access_groups: accessGroups,
+        notes: notes.trim(),
+        images: [],
       };
 
-      if (mode === 'edit') {
-        await updateUser(payload);
-      } else {
-        await enrollUser(payload);
-      }
-      
-      Alert.alert(
-        mode === 'edit' ? 'Utilisateur modifié' : t('enrollment.enrollmentStartedTitle'),
-        mode === 'edit' ? 'Les informations utilisateur ont été mises à jour.' : t('enrollment.enrollmentStartedDesc'),
-        [{ text: t('common.ok'), onPress: () => navigation.goBack() }]
-      );
+      const response = mode === 'edit'
+        ? await updateUser(payload)
+        : await enrollUser(payload);
+
+      const successTitle = mode === 'edit' ? t('enrollment.editSuccessTitle') : t('common.success');
+      const successMessage = mode === 'edit'
+        ? t('enrollment.editSuccessDesc')
+        : t('enrollment.enrollmentSuccessDesc', { userId: response?.user_id || t('enrollment.autoAssigned') });
+
+      Alert.alert(successTitle, successMessage, [{ text: t('common.ok'), onPress: () => navigation.goBack() }]);
     } catch (err) {
-      Alert.alert(t('common.error'), t('enrollment.enrollmentErrorDesc'));
+      Alert.alert(t('common.error'), err?.message || t('enrollment.enrollmentErrorDesc'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -125,47 +156,86 @@ export default function EnrollUser({ navigation, route }) {
           <Text style={styles.subtitle}>{t('enrollment.subtitle')}</Text>
         </View>
 
-        {/* Profile Section */}
         <BlurView intensity={15} tint="dark" style={styles.card}>
           <Text style={styles.cardTitle}>{t('enrollment.userProfile').toUpperCase()}</Text>
-          
+
           <View style={styles.photoContainer}>
             <LinearGradient colors={['#1c3d5a', '#0d1b2e']} style={styles.photoCircle}>
               <Ionicons name="person-add" size={40} color={COLORS.neonCyan} />
             </LinearGradient>
-            <TouchableOpacity style={styles.photoAction}>
-              <Text style={styles.photoActionText}>{t('enrollment.capturePhoto').toUpperCase()}</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.formRow}>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>{t('enrollment.fullName').toUpperCase()}</Text>
-              <TextInput style={styles.input} value={fullName} onChangeText={setFullName} placeholderTextColor={COLORS.textDim} />
+              <TextInput
+                style={styles.input}
+                value={fullName}
+                onChangeText={setFullName}
+                placeholderTextColor={COLORS.textDim}
+              />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>{t('enrollment.employeeId').toUpperCase()}</Text>
-              <TextInput style={styles.input} value={employeeId} onChangeText={setEmployeeId} placeholderTextColor={COLORS.textDim} />
+              <Text style={styles.inputLabel}>{t('enrollment.autoIdLabel').toUpperCase()}</Text>
+              <View style={styles.readOnlyInput}>
+                <Text style={styles.readOnlyValue}>{employeeId || t('enrollment.autoAssigned')}</Text>
+              </View>
+              <Text style={styles.helperText}>{t('enrollment.autoIdDesc')}</Text>
             </View>
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>{t('enrollment.email').toUpperCase()}</Text>
-            <TextInput style={styles.input} value={email} onChangeText={setEmail} keyboardType="email-address" />
+            <TextInput style={styles.input} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
           </View>
 
           <View style={styles.formRow}>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>{t('enrollment.role').toUpperCase()}</Text>
-              <View style={styles.pickerView}>
-                <Text style={styles.pickerText}>{t('enrollment.operatorRole')}</Text>
-                <Ionicons name="chevron-down" size={14} color={COLORS.textDim} />
+              <View style={styles.readOnlyInput}>
+                <Text style={styles.readOnlyValue}>{currentRole}</Text>
               </View>
             </View>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>{t('enrollment.department').toUpperCase()}</Text>
-              <TextInput style={styles.input} value={department} onChangeText={setDepartment} />
+              <TouchableOpacity
+                style={styles.pickerView}
+                activeOpacity={0.85}
+                onPress={() => setDepartmentMenuOpen((value) => !value)}
+              >
+                <Text style={styles.pickerText}>{department || t('enrollment.departmentSelect')}</Text>
+                <Ionicons name={departmentMenuOpen ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.textDim} />
+              </TouchableOpacity>
+              {departmentMenuOpen ? (
+                <View style={styles.dropdownMenu}>
+                  {departmentOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.key}
+                      style={styles.dropdownItem}
+                      onPress={() => {
+                        setDepartment(option.label);
+                        setDepartmentMenuOpen(false);
+                      }}
+                    >
+                      <Text style={[styles.dropdownItemText, department === option.label && styles.dropdownItemTextActive]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
             </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>{t('enrollment.notes').toUpperCase()}</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              numberOfLines={3}
+            />
           </View>
 
           <Text style={styles.inputLabel}>{t('enrollment.accessGroups').toUpperCase()}</Text>
@@ -177,34 +247,42 @@ export default function EnrollUser({ navigation, route }) {
           </View>
         </BlurView>
 
-        {/* Biometric Capture Section */}
         <BlurView intensity={15} tint="dark" style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={[styles.cardTitle, { color: COLORS.neonPurple }]}>{t('enrollment.veinCapture').toUpperCase()}</Text>
-            <Ionicons name="finger-print" size={20} color={COLORS.neonPurple} />
+            <Text style={[styles.cardTitle, styles.captureTitle]}>{t('enrollment.veinCapture').toUpperCase()}</Text>
+            <Ionicons name="scan-outline" size={20} color={COLORS.neonPurple} />
           </View>
 
           <View style={styles.scannerInterface}>
-            <LinearGradient colors={['rgba(0, 242, 255, 0.05)', 'transparent']} style={styles.scannerGlow}>
-              <Ionicons name="hand-left" size={60} color={COLORS.neonCyan} style={{ opacity: 0.5 }} />
-              <Text style={styles.scannerHint}>{t('enrollment.alignHint')}</Text>
-            </LinearGradient>
+            {previewUri ? (
+              <Image source={{ uri: previewUri }} style={styles.previewImage} resizeMode="cover" />
+            ) : (
+              <LinearGradient colors={['rgba(0, 242, 255, 0.05)', 'transparent']} style={styles.scannerGlow}>
+                <Ionicons name="hand-left" size={60} color={COLORS.neonCyan} style={styles.handIcon} />
+                <Text style={styles.scannerHint}>{t('enrollment.cameraPreviewUnavailable')}</Text>
+              </LinearGradient>
+            )}
+            <View style={styles.scannerOverlay}>
+              <View style={styles.cornerTL} />
+              <View style={styles.cornerTR} />
+              <View style={styles.cornerBL} />
+              <View style={styles.cornerBR} />
+            </View>
           </View>
 
-          <TouchableOpacity style={styles.primaryAction}>
-            <LinearGradient colors={['#1c3d5a', '#0d1b2e']} style={styles.primaryActionInner}>
-              <Text style={styles.primaryActionText}>{t('enrollment.startCapture').toUpperCase()}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+          <Text style={styles.livePreviewLabel}>{t('enrollment.livePreview')}</Text>
+          <Text style={styles.captureDesc}>{t('enrollment.multiAngleDesc')}</Text>
+          <Text style={styles.sampleCountText}>
+            {t('enrollment.sampleCountLabel')}: {enrollmentProgress > 0 ? `${enrollmentProgress}/${enrollmentTarget}` : String(enrollmentTarget)}
+          </Text>
 
           <View style={styles.statusGrid}>
-            <StatusIndicator label={t('enrollment.liveness')} active={false} />
-            <StatusIndicator label={t('enrollment.qualityStatus')} active={false} />
-            <StatusIndicator label={t('enrollment.pattern')} active={false} />
+            <StatusIndicator label={t('enrollment.livePreview')} active={Boolean(previewUri)} />
+            <StatusIndicator label={t('enrollment.qualityStatus')} active={Boolean(telemetry?.camera?.available)} />
+            <StatusIndicator label={t('enrollment.pattern')} active={enrollmentProgress > 0} />
           </View>
         </BlurView>
 
-        {/* Consent Section */}
         <BlurView intensity={10} style={styles.consentCard}>
           <View style={styles.consentHeader}>
             <Ionicons name="shield-half" size={20} color={COLORS.neonAmber} />
@@ -214,19 +292,24 @@ export default function EnrollUser({ navigation, route }) {
           <CheckItem label={t('enrollment.consentCheckLabel')} checked={consent} onToggle={() => setConsent(!consent)} />
         </BlurView>
 
-        {/* Footer Actions */}
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.saveBtn} onPress={handleCompleteEnrollment}>
+          <TouchableOpacity style={[styles.saveBtn, submitting && styles.saveBtnDisabled]} onPress={handleCompleteEnrollment} disabled={submitting}>
             <LinearGradient colors={GRADIENTS.neonCyan} style={styles.saveBtnInner}>
-              <Text style={styles.saveBtnText}>{mode === 'edit' ? t('userManagement.editUser') : t('enrollment.completeEnrollment').toUpperCase()}</Text>
+              <Text style={styles.saveBtnText}>
+                {submitting
+                  ? t('enrollment.startCapture').toUpperCase()
+                  : mode === 'edit'
+                    ? t('userManagement.editUser')
+                    : t('enrollment.completeEnrollment').toUpperCase()}
+              </Text>
             </LinearGradient>
           </TouchableOpacity>
           <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation?.goBack()}>
             <Text style={styles.cancelBtnText}>{t('common.cancel').toUpperCase()}</Text>
           </TouchableOpacity>
         </View>
-        
-        <View style={{ height: 40 }} />
+
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </View>
   );
@@ -245,12 +328,10 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
   headerTitle: { color: COLORS.white, fontSize: 18, fontWeight: '800', letterSpacing: 1 },
   spacer: { width: 40 },
-
   scroll: { flex: 1, paddingHorizontal: 20 },
   scrollContent: { paddingTop: 10 },
   welcomeSection: { marginBottom: 25 },
-  subtitle: { color: COLORS.textSecondary, fontSize: 14 },
-
+  subtitle: { color: COLORS.textSecondary, fontSize: 14, lineHeight: 20 },
   card: {
     borderRadius: 24,
     padding: 20,
@@ -261,14 +342,19 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   cardTitle: { color: COLORS.neonCyan, fontSize: 12, fontWeight: '900', letterSpacing: 2, marginBottom: 20 },
-  
-  photoContainer: { alignItems: 'center', marginBottom: 25 },
-  photoCircle: { width: 90, height: 90, borderRadius: 45, justifyContent: 'center', alignItems: 'center', marginBottom: 15, borderWidth: 1, borderColor: 'rgba(0, 242, 255, 0.2)' },
-  photoAction: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(0, 242, 255, 0.1)', borderWidth: 1, borderColor: 'rgba(0, 242, 255, 0.2)' },
-  photoActionText: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
-
+  captureTitle: { marginBottom: 0 },
+  photoContainer: { alignItems: 'center', marginBottom: 20 },
+  photoCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 242, 255, 0.2)',
+  },
   formRow: { flexDirection: 'row', gap: 15, marginBottom: 15, flexWrap: 'wrap' },
-  inputGroup: { flex: 1, marginBottom: 15 },
+  inputGroup: { flex: 1, marginBottom: 15, minWidth: 140 },
   inputLabel: { color: COLORS.textDim, fontSize: 9, fontWeight: '800', letterSpacing: 1, marginBottom: 8 },
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
@@ -281,6 +367,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  readOnlyInput: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: 15,
+  },
+  readOnlyValue: { color: COLORS.white, fontSize: 14, fontWeight: '700' },
+  helperText: { color: COLORS.textSecondary, fontSize: 11, lineHeight: 16, marginTop: 8 },
   pickerView: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -292,43 +389,90 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 12,
   },
-  pickerText: { color: COLORS.white, fontSize: 14, fontWeight: '600' },
-
+  pickerText: { color: COLORS.white, fontSize: 14, fontWeight: '600', flexShrink: 1 },
+  dropdownMenu: {
+    marginTop: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(9, 18, 31, 0.96)',
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.04)',
+  },
+  dropdownItemText: { color: COLORS.textSecondary, fontSize: 13, fontWeight: '700' },
+  dropdownItemTextActive: { color: COLORS.neonCyan },
+  textArea: { minHeight: 86, textAlignVertical: 'top' },
   checkGrid: { gap: 10 },
   checkRow: { flexDirection: 'row', alignItems: 'flex-start', width: '100%', marginBottom: 5 },
-  checkbox: { width: 18, height: 18, borderRadius: 5, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.2)', marginRight: 10, justifyContent: 'center', alignItems: 'center' },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxActive: { borderColor: COLORS.neonGreen, backgroundColor: 'rgba(57, 255, 20, 0.1)' },
   checkText: { color: COLORS.textDim, fontSize: 12, fontWeight: '500', flex: 1, lineHeight: 18 },
-
+  checkTextActive: { color: COLORS.white },
   scannerInterface: {
-    height: 180,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    height: 220,
+    backgroundColor: 'rgba(0, 0, 0, 0.22)',
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(188, 19, 254, 0.1)',
-    marginBottom: 20,
+    marginBottom: 16,
     overflow: 'hidden',
+    position: 'relative',
   },
-  scannerGlow: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 15 },
-  scannerHint: { color: COLORS.textDim, fontSize: 10, fontWeight: '700', letterSpacing: 1, textAlign: 'center', lineHeight: 15, paddingHorizontal: 16 },
-
-  primaryAction: { borderRadius: 15, overflow: 'hidden', marginBottom: 20, borderWidth: 1, borderColor: 'rgba(188, 19, 254, 0.3)' },
-  primaryActionInner: { paddingVertical: 15, alignItems: 'center' },
-  primaryActionText: { color: COLORS.neonPurple, fontWeight: '900', letterSpacing: 2, fontSize: 13 },
-
-  statusGrid: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 10, flexWrap: 'wrap', gap: 10 },
+  previewImage: { width: '100%', height: '100%' },
+  scannerGlow: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 15, paddingHorizontal: 18 },
+  handIcon: { opacity: 0.55 },
+  scannerHint: {
+    color: COLORS.textDim,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  scannerOverlay: { ...StyleSheet.absoluteFillObject },
+  cornerTL: { position: 'absolute', top: 15, left: 15, width: 26, height: 26, borderTopWidth: 2, borderLeftWidth: 2, borderColor: COLORS.neonCyan },
+  cornerTR: { position: 'absolute', top: 15, right: 15, width: 26, height: 26, borderTopWidth: 2, borderRightWidth: 2, borderColor: COLORS.neonCyan },
+  cornerBL: { position: 'absolute', bottom: 15, left: 15, width: 26, height: 26, borderBottomWidth: 2, borderLeftWidth: 2, borderColor: COLORS.neonCyan },
+  cornerBR: { position: 'absolute', bottom: 15, right: 15, width: 26, height: 26, borderBottomWidth: 2, borderRightWidth: 2, borderColor: COLORS.neonCyan },
+  livePreviewLabel: { color: COLORS.neonCyan, fontSize: 12, fontWeight: '800', marginBottom: 8 },
+  captureDesc: { color: COLORS.textSecondary, fontSize: 12, lineHeight: 18, marginBottom: 8 },
+  sampleCountText: { color: COLORS.white, fontSize: 12, fontWeight: '800', marginBottom: 16 },
+  statusGrid: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 6, flexWrap: 'wrap', gap: 10 },
   statusItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusLabel: { color: COLORS.textDim, fontSize: 9, fontWeight: '700' },
-
-  consentCard: { padding: 20, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255, 216, 78, 0.1)', marginBottom: 30 },
-  consentHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 15 },
-  consentTitle: { color: COLORS.neonAmber, fontSize: 11, fontWeight: '900', letterSpacing: 1, flex: 1 },
-  consentBody: { color: COLORS.textDim, fontSize: 13, lineHeight: 20, marginBottom: 15 },
-
+  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
+  statusDotActive: { backgroundColor: COLORS.neonGreen },
+  statusLabel: { color: COLORS.textDim, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  statusLabelActive: { color: COLORS.white },
+  consentCard: {
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    marginBottom: 20,
+  },
+  consentHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  consentTitle: { color: COLORS.neonAmber, fontSize: 11, fontWeight: '900', letterSpacing: 1.5, flex: 1 },
+  consentBody: { color: COLORS.textSecondary, fontSize: 12, lineHeight: 18, marginBottom: 14 },
   footer: { gap: 12 },
-  saveBtn: { borderRadius: 18, overflow: 'hidden' },
-  saveBtnInner: { paddingVertical: 18, alignItems: 'center' },
-  saveBtnText: { color: COLORS.white, fontWeight: '900', letterSpacing: 2, fontSize: 14 },
-  cancelBtn: { paddingVertical: 15, alignItems: 'center' },
-  cancelBtnText: { color: COLORS.textDim, fontWeight: '700', letterSpacing: 1, fontSize: 12 },
+  saveBtn: { borderRadius: 16, overflow: 'hidden' },
+  saveBtnDisabled: { opacity: 0.7 },
+  saveBtnInner: { paddingVertical: 17, alignItems: 'center', justifyContent: 'center' },
+  saveBtnText: { color: COLORS.white, fontWeight: '900', letterSpacing: 1.5, fontSize: 13, textAlign: 'center', paddingHorizontal: 12 },
+  cancelBtn: { paddingVertical: 14, alignItems: 'center' },
+  cancelBtnText: { color: COLORS.textSecondary, fontWeight: '800', letterSpacing: 1.5 },
+  bottomSpacer: { height: 40 },
 });

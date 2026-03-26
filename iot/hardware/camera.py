@@ -30,10 +30,24 @@ class AccessCamera(Camera):
                 )
                 self._camera.configure(preview)
                 self._camera.start()
+                self._apply_noir_controls()
                 self.available = True
             except Exception as exc:
                 logger.warning("Camera unavailable, fallback to mock frame: %s", exc)
                 self._camera = None
+
+    def _apply_noir_controls(self) -> None:
+        if self._camera is None:
+            return
+        try:
+            # NoIR frames are processed as grayscale; keep colors neutral and sharpen texture details.
+            self._camera.set_controls({
+                "Saturation": 0.0,
+                "Contrast": 1.15,
+                "Sharpness": 1.3,
+            })
+        except Exception as exc:
+            logger.debug("Unable to apply NoIR controls: %s", exc)
 
     def capture_array(self):
         if self._camera is not None:

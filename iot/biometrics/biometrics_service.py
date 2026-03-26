@@ -24,31 +24,80 @@ def _log_hu(hu_moments: np.ndarray) -> list[float]:
 
 def _central_roi(frame_bgr: np.ndarray) -> np.ndarray:
     height, width = frame_bgr.shape[:2]
-    x1 = int(width * 0.2)
-    y1 = int(height * 0.12)
-    x2 = int(width * 0.8)
-    y2 = int(height * 0.92)
+    x1 = int(width * 0.18)
+    y1 = int(height * 0.10)
+    x2 = int(width * 0.82)
+    y2 = int(height * 0.94)
     return frame_bgr[y1:y2, x1:x2].copy()
 
 
-def segment_hand(frame_bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
-    roi = _central_roi(frame_bgr)
-    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    blur = cv2.GaussianBlur(gray, (7, 7), 0)
-    _, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+def _create_clahe():
+    grid = max(2, int(config.NOIR_CLAHE_GRID_SIZE))
+    return cv2.createCLAHE(clipLimit=float(config.NOIR_CLAHE_CLIP_LIMIT), tileGridSize=(grid, grid))
 
-    kernel = np.ones((5, 5), np.uint8)
+
+def _elliptic_kernel(size: int) -> np.ndarray:
+    odd_size = max(3, int(size))
+    if odd_size % 2 == 0:
+        odd_size += 1
+    return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (odd_size, odd_size))
+
+
+def _preprocess_noir_gray(roi_bgr: np.ndarray) -> np.ndarray:
+    gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray, (5, 5), 0)
+    return _create_clahe().apply(gray)
+
+
+def _enhance_veins(gray_roi: np.ndarray, hand_mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    blackhat_small = cv2.morphologyEx(
+        gray_roi,
+        cv2.MORPH_BLACKHAT,
+        _elliptic_kernel(config.NOIR_BLACKHAT_SMALL),
+    )
+    blackhat_large = cv2.morphologyEx(
+        gray_roi,
+        cv2.MORPH_BLACKHAT,
+        _elliptic_kernel(config.NOIR_BLACKHAT_LARGE),
+    )
+    enhanced = cv2.addWeighted(blackhat_small, 0.55, blackhat_large, 0.45, 0.0)
+    enhanced = cv2.normalize(enhanced, None, 0, 255, cv2.NORM_MINMAX)
+    enhanced = _create_clahe().apply(enhanced.astype(np.uint8))
+
+    block_size = max(3, int(config.NOIR_ADAPTIVE_BLOCK_SIZE))
+    if block_size % 2 == 0:
+        block_size += 1
+    adaptive = cv2.adaptiveThreshold(
+        enhanced,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        block_size,
+        int(config.NOIR_ADAPTIVE_C),
+    )
+    adaptive = cv2.bitwise_and(adaptive, hand_mask)
+    adaptive = cv2.morphologyEx(adaptive, cv2.MORPH_OPEN, _elliptic_kernel(3), iterations=1)
+    adaptive = cv2.morphologyEx(adaptive, cv2.MORPH_CLOSE, _elliptic_kernel(5), iterations=1)
+    return enhanced, adaptive
+
+
+def segment_hand(frame_bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, np.ndarray]:
+    roi = _central_roi(frame_bgr)
+    gray = _preprocess_noir_gray(roi)
+    _, mask = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    kernel = _elliptic_kernel(5)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
 
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
-        return roi, mask, None
+        return roi, mask, None, gray
 
     contour = max(contours, key=cv2.contourArea)
     if cv2.contourArea(contour) < config.MIN_HAND_AREA:
-        return roi, mask, None
-    return roi, mask, contour
+        return roi, mask, None, gray
+    return roi, mask, contour, gray
 
 
 def _extract_geometry(contour: np.ndarray) -> dict[str, Any]:
@@ -88,46 +137,97 @@ def _extract_geometry(contour: np.ndarray) -> dict[str, Any]:
     }
 
 
-def _extract_orb_signature(roi_bgr: np.ndarray, contour: np.ndarray | None) -> dict[str, Any]:
-    gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
-    mask = None
-    if contour is not None:
-        mask = np.zeros(gray.shape, dtype=np.uint8)
-        cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
+def _extract_histogram(image: np.ndarray, mask: np.ndarray | None) -> list[float]:
+    histogram = cv2.calcHist([image], [0], mask, [32], [0, 256])
+    histogram = cv2.normalize(histogram, histogram).flatten()
+    return [round(float(value), 6) for value in histogram.tolist()]
 
-    orb = cv2.ORB_create(nfeatures=128)
-    keypoints, descriptors = orb.detectAndCompute(gray, mask)
+
+def _extract_orb_signature(image: np.ndarray, mask: np.ndarray | None) -> dict[str, Any]:
+    orb = cv2.ORB_create(nfeatures=config.ORB_FEATURE_COUNT)
+    keypoints, descriptors = orb.detectAndCompute(image, mask)
 
     if descriptors is None or len(keypoints) == 0:
-        return {"vector": [0.0] * 32, "keypoints": 0}
+        return {
+            "vector": [0.0] * 32,
+            "descriptor_rows": [],
+            "keypoints": 0,
+        }
 
-    vector = descriptors.mean(axis=0).astype(np.float32)
+    ranked = sorted(zip(keypoints, descriptors), key=lambda item: item[0].response, reverse=True)
+    limited_descriptors = np.array(
+        [descriptor for _, descriptor in ranked[: config.ORB_DESCRIPTOR_LIMIT]],
+        dtype=np.uint8,
+    )
+    vector = limited_descriptors.mean(axis=0).astype(np.float32)
     return {
         "vector": [round(float(value), 4) for value in vector.tolist()],
+        "descriptor_rows": limited_descriptors.astype(int).tolist(),
         "keypoints": len(keypoints),
     }
 
 
+def _quality_score(hand_area: float, keypoints: int, vein_density: float, sharpness: float) -> float:
+    area_component = min(hand_area / 25000.0, 1.0)
+    kp_component = min(keypoints / 90.0, 1.0)
+    density_component = min(vein_density / 0.22, 1.0)
+    sharpness_component = min(sharpness / 250.0, 1.0)
+    return round(
+        float(0.28 * area_component + 0.27 * kp_component + 0.20 * density_component + 0.25 * sharpness_component),
+        4,
+    )
+
+
 def build_multimodal_profile(frame_bgr: np.ndarray) -> dict[str, Any]:
-    roi, mask, contour = segment_hand(frame_bgr)
+    roi, hand_mask, contour, gray_roi = segment_hand(frame_bgr)
     if contour is None:
         raise ValueError("Aucune paume exploitable detectee dans la ROI.")
 
     geometry = _extract_geometry(contour)
-    orb = _extract_orb_signature(roi, contour)
+
+    contour_mask = np.zeros(gray_roi.shape, dtype=np.uint8)
+    cv2.drawContours(contour_mask, [contour], -1, 255, thickness=cv2.FILLED)
+
+    vein_enhanced, vein_mask = _enhance_veins(gray_roi, contour_mask)
+    orb = _extract_orb_signature(vein_enhanced, contour_mask)
+
+    hand_pixels = max(int(np.count_nonzero(contour_mask)), 1)
+    vein_pixels = int(np.count_nonzero(vein_mask))
+    vein_density = vein_pixels / float(hand_pixels)
+    sharpness = float(cv2.Laplacian(vein_enhanced, cv2.CV_32F).var())
+
     quality = {
         "hand_area": geometry["area"],
         "keypoints": orb["keypoints"],
-        "mask_fill_ratio": round(float(np.count_nonzero(mask)) / float(mask.size), 4),
+        "mask_fill_ratio": round(hand_pixels / float(contour_mask.size), 4),
+        "vein_density": round(vein_density, 4),
+        "sharpness": round(sharpness, 4),
+        "score": _quality_score(geometry["area"], orb["keypoints"], vein_density, sharpness),
     }
 
     profile = {
-        "schema_version": "2.0",
-        "modalities": ["palmprint", "finger_geometry"],
+        "schema_version": "3.0",
+        "sensor": {
+            "camera": "raspberry-pi-noir-v2",
+            "preprocessing": [
+                "grayscale",
+                "clahe",
+                "blackhat",
+                "adaptive_threshold",
+                "orb",
+            ],
+        },
+        "modalities": ["palm_texture", "vein_pattern", "finger_geometry"],
         "palmprint": {
             "geometry": geometry,
+            "intensity_histogram": _extract_histogram(vein_enhanced, contour_mask),
             "orb_signature": orb["vector"],
+            "descriptor_rows": orb["descriptor_rows"],
             "quality": quality,
+        },
+        "vein_pattern": {
+            "density": round(vein_density, 6),
+            "binary_fill_ratio": round(vein_pixels / float(vein_mask.size), 6),
         },
         "finger_geometry": {
             "estimated_finger_gaps": geometry["convexity_defects"],
@@ -148,10 +248,86 @@ def generate_biometric_key(profile: dict[str, Any]) -> str:
         "convexity_defects": int(geometry["convexity_defects"]),
         "finger_peaks": int(geometry["finger_peaks"]),
         "hu": [round(float(value), 4) for value in geometry["hu"]],
+        "histogram": [round(float(value), 4) for value in profile["palmprint"]["intensity_histogram"]],
         "orb_signature": [round(float(value), 2) for value in profile["palmprint"]["orb_signature"]],
+        "vein_density": round(float(profile["vein_pattern"]["density"]), 5),
     }
     serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _mean_numeric(values: list[float | int]) -> float:
+    return float(np.mean(np.array(values, dtype=np.float32)))
+
+
+def _merge_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    base = samples[0]
+    geometry = {
+        "area": round(_mean_numeric([sample["palmprint"]["geometry"]["area"] for sample in samples]), 4),
+        "perimeter": round(_mean_numeric([sample["palmprint"]["geometry"]["perimeter"] for sample in samples]), 4),
+        "aspect_ratio": round(_mean_numeric([sample["palmprint"]["geometry"]["aspect_ratio"] for sample in samples]), 6),
+        "hull_area": round(_mean_numeric([sample["palmprint"]["geometry"]["hull_area"] for sample in samples]), 4),
+        "solidity": round(_mean_numeric([sample["palmprint"]["geometry"]["solidity"] for sample in samples]), 6),
+        "convexity_defects": int(round(_mean_numeric([sample["palmprint"]["geometry"]["convexity_defects"] for sample in samples]))),
+        "finger_peaks": int(round(_mean_numeric([sample["palmprint"]["geometry"]["finger_peaks"] for sample in samples]))),
+        "hu": [
+            round(
+                _mean_numeric([sample["palmprint"]["geometry"]["hu"][index] for sample in samples]),
+                6,
+            )
+            for index in range(len(base["palmprint"]["geometry"]["hu"]))
+        ],
+    }
+    histogram_length = len(base["palmprint"]["intensity_histogram"])
+    orb_length = len(base["palmprint"]["orb_signature"])
+    best_sample = max(samples, key=lambda sample: sample["palmprint"]["quality"]["score"])
+
+    fused = {
+        "schema_version": "3.0",
+        "sensor": base["sensor"],
+        "modalities": base["modalities"],
+        "palmprint": {
+            "geometry": geometry,
+            "intensity_histogram": [
+                round(_mean_numeric([sample["palmprint"]["intensity_histogram"][index] for sample in samples]), 6)
+                for index in range(histogram_length)
+            ],
+            "orb_signature": [
+                round(_mean_numeric([sample["palmprint"]["orb_signature"][index] for sample in samples]), 4)
+                for index in range(orb_length)
+            ],
+            "descriptor_rows": best_sample["palmprint"]["descriptor_rows"],
+            "quality": {
+                "hand_area": round(_mean_numeric([sample["palmprint"]["quality"]["hand_area"] for sample in samples]), 4),
+                "keypoints": int(round(_mean_numeric([sample["palmprint"]["quality"]["keypoints"] for sample in samples]))),
+                "mask_fill_ratio": round(_mean_numeric([sample["palmprint"]["quality"]["mask_fill_ratio"] for sample in samples]), 4),
+                "vein_density": round(_mean_numeric([sample["palmprint"]["quality"]["vein_density"] for sample in samples]), 4),
+                "sharpness": round(_mean_numeric([sample["palmprint"]["quality"]["sharpness"] for sample in samples]), 4),
+                "score": round(_mean_numeric([sample["palmprint"]["quality"]["score"] for sample in samples]), 4),
+            },
+        },
+        "vein_pattern": {
+            "density": round(_mean_numeric([sample["vein_pattern"]["density"] for sample in samples]), 6),
+            "binary_fill_ratio": round(_mean_numeric([sample["vein_pattern"]["binary_fill_ratio"] for sample in samples]), 6),
+        },
+        "finger_geometry": {
+            "estimated_finger_gaps": geometry["convexity_defects"],
+            "estimated_finger_peaks": geometry["finger_peaks"],
+        },
+        "sample_quality_ranking": [
+            {
+                "sample_index": index,
+                "score": sample["palmprint"]["quality"]["score"],
+            }
+            for index, sample in sorted(
+                enumerate(samples),
+                key=lambda item: item[1]["palmprint"]["quality"]["score"],
+                reverse=True,
+            )
+        ],
+    }
+    fused["biometric_key"] = generate_biometric_key(fused)
+    return fused
 
 
 def build_enrollment_profile(frames_bgr: list[np.ndarray]) -> dict[str, Any]:
@@ -159,17 +335,34 @@ def build_enrollment_profile(frames_bgr: list[np.ndarray]) -> dict[str, Any]:
     if not samples:
         raise ValueError("Aucun echantillon biométrique capturé.")
 
-    primary = dict(samples[0])
-    primary["samples"] = samples
-    primary["sample_count"] = len(samples)
-    primary["sample_keys"] = [sample["biometric_key"] for sample in samples]
-    primary["biometric_key"] = hashlib.sha256("|".join(primary["sample_keys"]).encode("utf-8")).hexdigest()
-    return primary
+    fused = _merge_samples(samples)
+    fused["samples"] = samples
+    fused["sample_count"] = len(samples)
+    fused["sample_keys"] = [sample["biometric_key"] for sample in samples]
+    fused["fusion_mode"] = "multisample_average_best_descriptor"
+    fused["biometric_key"] = hashlib.sha256("|".join(fused["sample_keys"]).encode("utf-8")).hexdigest()
+    return fused
 
 
 def _relative_score(value_a: float, value_b: float) -> float:
     denominator = max(abs(value_b), 1e-6)
     return abs(value_a - value_b) / denominator
+
+
+def _descriptor_match_score(live_rows: list[list[int]], ref_rows: list[list[int]]) -> float:
+    if not live_rows or not ref_rows:
+        return 1.0
+
+    live = np.array(live_rows, dtype=np.uint8)
+    ref = np.array(ref_rows, dtype=np.uint8)
+    matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    matches = matcher.match(live, ref)
+    if not matches:
+        return 1.0
+
+    good_matches = [match for match in matches if match.distance <= 48]
+    denominator = max(min(len(live_rows), len(ref_rows)), 1)
+    return 1.0 - min(len(good_matches) / float(denominator), 1.0)
 
 
 def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> dict[str, Any]:
@@ -195,24 +388,47 @@ def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, An
     ref_orb = np.array(stored_profile["palmprint"]["orb_signature"], dtype=np.float32)
     orb_score = float(np.mean(np.abs(live_orb - ref_orb) / 255.0))
 
-    palm_score = 0.55 * geometry_score + 0.20 * hu_score + 0.25 * orb_score
-    total_score = palm_score
+    live_hist = np.array(live_profile["palmprint"]["intensity_histogram"], dtype=np.float32)
+    ref_hist = np.array(stored_profile["palmprint"]["intensity_histogram"], dtype=np.float32)
+    histogram_score = float(np.mean(np.abs(live_hist - ref_hist)))
+
+    descriptor_score = _descriptor_match_score(
+        live_profile["palmprint"].get("descriptor_rows", []),
+        stored_profile["palmprint"].get("descriptor_rows", []),
+    )
+    density_score = _relative_score(
+        live_profile["vein_pattern"]["density"],
+        stored_profile["vein_pattern"]["density"],
+    )
+
+    palm_score = (
+        0.28 * geometry_score
+        + 0.18 * hu_score
+        + 0.18 * orb_score
+        + 0.16 * histogram_score
+        + 0.14 * descriptor_score
+        + 0.06 * density_score
+    )
 
     return {
-        "match": total_score <= config.MATCH_THRESHOLD,
-        "score": round(float(total_score), 4),
+        "match": palm_score <= config.MATCH_THRESHOLD,
+        "score": round(float(palm_score), 4),
         "threshold": config.MATCH_THRESHOLD,
         "components": {
             "geometry": round(float(geometry_score), 4),
             "hu": round(float(hu_score), 4),
             "orb": round(float(orb_score), 4),
+            "histogram": round(float(histogram_score), 4),
+            "descriptor": round(float(descriptor_score), 4),
+            "vein_density": round(float(density_score), 4),
         },
     }
 
 
 def verify_multimodal(frame_bgr: np.ndarray, stored_profile: dict) -> dict[str, Any]:
     live_profile = build_multimodal_profile(frame_bgr)
-    candidates = stored_profile.get("samples") or [stored_profile]
+    candidates = [stored_profile]
+    candidates.extend(stored_profile.get("samples") or [])
 
     scored_candidates = []
     for index, candidate in enumerate(candidates):

@@ -47,6 +47,7 @@ export const useMqttStore = create((set, get) => ({
   client: null,
   isConnected: false,
   status: 'OFFLINE',
+  statusPayload: null,
   telemetry: null,
   settingsAck: null,
   lastScanResult: null,
@@ -135,7 +136,7 @@ export const useMqttStore = create((set, get) => ({
       try {
         const data = JSON.parse(payload.toString());
         if (topicName === MQTT_TOPICS.status) {
-          set({ status: data.status || 'ONLINE' });
+          set({ status: data.status || 'ONLINE', statusPayload: data });
           return;
         }
 
@@ -163,7 +164,7 @@ export const useMqttStore = create((set, get) => ({
       }
     });
 
-    client.on('close', () => set({ isConnected: false, status: 'OFFLINE', client: null }));
+    client.on('close', () => set({ isConnected: false, status: 'OFFLINE', statusPayload: null, client: null }));
     client.on('error', (error) => set({ isConnected: false, status: 'ERROR', lastError: error?.message || 'MQTT error' }));
 
     set({ client });
@@ -251,7 +252,8 @@ export const useMqttStore = create((set, get) => ({
     get().request(
       MQTT_TOPICS.enrollCmd,
       responseTopic('users/enroll', get().clientId),
-      payload
+      payload,
+      30000
     ).then(async (response) => {
       if (response?.status === 'success') {
         await syncUserProfile(response.user_id, {
@@ -301,7 +303,8 @@ export const useMqttStore = create((set, get) => ({
     get().request(
       MQTT_TOPICS.scanCmd,
       responseTopic('access/scan', get().clientId),
-      userId ? { user_id: userId } : {}
+      userId ? { user_id: userId } : {},
+      12000
     ).then(async (response) => {
       if (response?.event?.id) {
         set({ lastScanResult: response });

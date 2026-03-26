@@ -16,6 +16,14 @@ import config
 logger = logging.getLogger(__name__)
 
 
+def _coerce_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 class SecurityController:
     def __init__(self):
         self.green_led = StatusLED(config.PIN_LED_GREEN, name="Green LED")
@@ -148,10 +156,10 @@ class SecurityController:
 
     def apply_remote_settings(self, payload: dict) -> dict:
         if "auto_light_enabled" in payload:
-            self.auto_light_enabled = bool(payload["auto_light_enabled"])
+            self.auto_light_enabled = _coerce_bool(payload["auto_light_enabled"])
 
         if "assist_lights_on" in payload:
-            self.manual_light_enabled = bool(payload["assist_lights_on"])
+            self.manual_light_enabled = _coerce_bool(payload["assist_lights_on"])
 
         if "dark_ratio" in payload:
             try:
@@ -160,20 +168,21 @@ class SecurityController:
                 logger.warning("Invalid dark_ratio received: %s", payload.get("dark_ratio"))
 
         if "green_led_on" in payload:
-            self.green_led.set_state(bool(payload["green_led_on"]))
+            self.green_led.set_state(_coerce_bool(payload["green_led_on"]))
 
         if "red_led_on" in payload:
-            self.red_led.set_state(bool(payload["red_led_on"]))
+            self.red_led.set_state(_coerce_bool(payload["red_led_on"]))
 
         if payload.get("buzzer_test"):
             self.buzzer.beep(count=1, on_time=0.2, off_time=0.1)
 
-        line1 = str(payload.get("lcd_line1", "")).strip()
-        line2 = str(payload.get("lcd_line2", "")).strip()
-        if line1 or line2:
-            self.lcd.show_message(line1 or config.APP_SHORT_NAME, line2)
-        else:
-            self.reset_idle()
+        if "lcd_line1" in payload or "lcd_line2" in payload:
+            line1 = str(payload.get("lcd_line1", "")).strip()
+            line2 = str(payload.get("lcd_line2", "")).strip()
+            if line1 or line2:
+                self.lcd.show_message(line1 or config.APP_SHORT_NAME, line2)
+            else:
+                self.reset_idle()
 
         telemetry = self.sensor_snapshot()
         return {

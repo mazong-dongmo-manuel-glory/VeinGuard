@@ -218,6 +218,13 @@ def list_users() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def generate_user_id(prefix: str = "BG-USER") -> str:
+    conn = get_db_connection()
+    total = conn.execute("SELECT COUNT(*) AS total FROM users").fetchone()["total"]
+    conn.close()
+    return f"{prefix}-{total + 1:04d}"
+
+
 def save_biometric_profile(user_id: str, profile: dict) -> None:
     conn = get_db_connection()
     conn.execute(
