@@ -208,6 +208,7 @@ class BioGuardMQTTGateway:
 
         enrollment_frames = []
         preview_paths = []
+        last_capture_telemetry = None
         attempts = 0
         try:
             while len(enrollment_frames) < config.ENROLLMENT_SAMPLE_COUNT and attempts < config.ENROLLMENT_MAX_ATTEMPTS:
@@ -225,8 +226,12 @@ class BioGuardMQTTGateway:
                     user_id[: config.LCD_COLS],
                 )
                 try:
-                    capture = self.controller.capture_attempt(claimed_user_id=f"{user_id}_{sample_index}")
+                    capture = self.controller.capture_attempt(
+                        claimed_user_id=f"{user_id}_{sample_index}",
+                        profile_mode="enrollment",
+                    )
                     enrollment_frames.append(capture["frame"])
+                    last_capture_telemetry = capture["telemetry"]
                     if capture["preview_path"]:
                         preview_paths.append(capture["preview_path"])
                 except Exception as exc:
@@ -283,6 +288,7 @@ class BioGuardMQTTGateway:
                     "profile_modalities": profile["modalities"],
                     "profile": profile,
                     "preview_paths": preview_paths,
+                    "telemetry": last_capture_telemetry,
                 }
             ),
         )
@@ -439,7 +445,7 @@ class BioGuardMQTTGateway:
         self.client.publish(config.MQTT_TOPIC_STATUS, json.dumps(payload))
 
     def publish_telemetry(self) -> None:
-        payload = self.controller.sensor_snapshot(include_preview=True)
+        payload = self.controller.sensor_snapshot()
         database.update_device_state("last_telemetry", payload)
         self.firebase.save_telemetry(config.DEVICE_ID, payload)
         self.client.publish(config.MQTT_TOPIC_TELEMETRY, json.dumps(payload))

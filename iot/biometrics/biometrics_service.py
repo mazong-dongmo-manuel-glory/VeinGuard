@@ -205,18 +205,53 @@ def _quality_score(hand_area: float, keypoints: int, vein_density: float, sharpn
     )
 
 
-def _capture_validation(geometry: dict[str, Any], quality: dict[str, Any]) -> dict[str, Any]:
+def _validation_profile(mode: str) -> dict[str, float | int]:
+    if mode == "enrollment":
+        return {
+            "min_mask_fill_ratio": config.ENROLLMENT_MIN_MASK_FILL_RATIO,
+            "max_mask_fill_ratio": config.MAX_MASK_FILL_RATIO,
+            "max_hand_area_ratio": config.MAX_HAND_AREA_RATIO,
+            "min_hand_extent": config.MIN_HAND_EXTENT,
+            "min_hand_solidity": config.MIN_HAND_SOLIDITY,
+            "max_hand_solidity": config.MAX_HAND_SOLIDITY,
+            "min_hand_aspect_ratio": config.MIN_HAND_ASPECT_RATIO,
+            "max_hand_aspect_ratio": config.MAX_HAND_ASPECT_RATIO,
+            "max_hand_center_distance": config.ENROLLMENT_MAX_HAND_CENTER_DISTANCE,
+            "max_border_touches": config.ENROLLMENT_MAX_BORDER_TOUCHES,
+            "min_orb_keypoints": config.ENROLLMENT_MIN_ORB_KEYPOINTS,
+            "min_sharpness": config.ENROLLMENT_MIN_SHARPNESS,
+            "min_capture_quality": config.ENROLLMENT_MIN_CAPTURE_QUALITY,
+        }
+    return {
+        "min_mask_fill_ratio": config.MIN_MASK_FILL_RATIO,
+        "max_mask_fill_ratio": config.MAX_MASK_FILL_RATIO,
+        "max_hand_area_ratio": config.MAX_HAND_AREA_RATIO,
+        "min_hand_extent": config.MIN_HAND_EXTENT,
+        "min_hand_solidity": config.MIN_HAND_SOLIDITY,
+        "max_hand_solidity": config.MAX_HAND_SOLIDITY,
+        "min_hand_aspect_ratio": config.MIN_HAND_ASPECT_RATIO,
+        "max_hand_aspect_ratio": config.MAX_HAND_ASPECT_RATIO,
+        "max_hand_center_distance": config.MAX_HAND_CENTER_DISTANCE,
+        "max_border_touches": config.MAX_BORDER_TOUCHES,
+        "min_orb_keypoints": config.MIN_ORB_KEYPOINTS,
+        "min_sharpness": config.MIN_SHARPNESS,
+        "min_capture_quality": config.MIN_CAPTURE_QUALITY,
+    }
+
+
+def _capture_validation(geometry: dict[str, Any], quality: dict[str, Any], mode: str = "scan") -> dict[str, Any]:
+    rules = _validation_profile(mode)
     checks = {
-        "hand_area_ratio": geometry["area_ratio"] <= config.MAX_HAND_AREA_RATIO,
-        "mask_fill_ratio": config.MIN_MASK_FILL_RATIO <= quality["mask_fill_ratio"] <= config.MAX_MASK_FILL_RATIO,
-        "extent": geometry["extent"] >= config.MIN_HAND_EXTENT,
-        "solidity": config.MIN_HAND_SOLIDITY <= geometry["solidity"] <= config.MAX_HAND_SOLIDITY,
-        "aspect_ratio": config.MIN_HAND_ASPECT_RATIO <= geometry["aspect_ratio"] <= config.MAX_HAND_ASPECT_RATIO,
-        "center_distance_ratio": geometry["center_distance_ratio"] <= config.MAX_HAND_CENTER_DISTANCE,
-        "border_touch_count": geometry["border_touch_count"] <= config.MAX_BORDER_TOUCHES,
-        "keypoints": quality["keypoints"] >= config.MIN_ORB_KEYPOINTS,
-        "sharpness": quality["sharpness"] >= config.MIN_SHARPNESS,
-        "quality_score": quality["score"] >= config.MIN_CAPTURE_QUALITY,
+        "hand_area_ratio": geometry["area_ratio"] <= float(rules["max_hand_area_ratio"]),
+        "mask_fill_ratio": float(rules["min_mask_fill_ratio"]) <= quality["mask_fill_ratio"] <= float(rules["max_mask_fill_ratio"]),
+        "extent": geometry["extent"] >= float(rules["min_hand_extent"]),
+        "solidity": float(rules["min_hand_solidity"]) <= geometry["solidity"] <= float(rules["max_hand_solidity"]),
+        "aspect_ratio": float(rules["min_hand_aspect_ratio"]) <= geometry["aspect_ratio"] <= float(rules["max_hand_aspect_ratio"]),
+        "center_distance_ratio": geometry["center_distance_ratio"] <= float(rules["max_hand_center_distance"]),
+        "border_touch_count": geometry["border_touch_count"] <= int(rules["max_border_touches"]),
+        "keypoints": quality["keypoints"] >= int(rules["min_orb_keypoints"]),
+        "sharpness": quality["sharpness"] >= float(rules["min_sharpness"]),
+        "quality_score": quality["score"] >= float(rules["min_capture_quality"]),
     }
     failed_checks = [name for name, passed in checks.items() if not passed]
     reason_map = {
@@ -237,10 +272,11 @@ def _capture_validation(geometry: dict[str, Any], quality: dict[str, Any]) -> di
         "failed_checks": failed_checks,
         "reason": reason,
         "checks": checks,
+        "mode": mode,
     }
 
 
-def build_multimodal_profile(frame_bgr: np.ndarray) -> dict[str, Any]:
+def build_multimodal_profile(frame_bgr: np.ndarray, mode: str = "scan") -> dict[str, Any]:
     roi, hand_mask, contour, gray_roi = segment_hand(frame_bgr)
     if contour is None:
         raise ValueError("Aucune paume exploitable detectee dans la ROI.")
@@ -266,7 +302,7 @@ def build_multimodal_profile(frame_bgr: np.ndarray) -> dict[str, Any]:
         "sharpness": round(sharpness, 4),
         "score": _quality_score(geometry["area"], orb["keypoints"], vein_density, sharpness),
     }
-    validation = _capture_validation(geometry, quality)
+    validation = _capture_validation(geometry, quality, mode=mode)
     quality["validation"] = validation
     if not validation["valid"]:
         raise ValueError(f"Capture biométrique invalide: {validation['reason']}")
@@ -397,7 +433,7 @@ def _merge_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def build_enrollment_profile(frames_bgr: list[np.ndarray]) -> dict[str, Any]:
-    samples = [build_multimodal_profile(frame) for frame in frames_bgr]
+    samples = [build_multimodal_profile(frame, mode="enrollment") for frame in frames_bgr]
     if not samples:
         raise ValueError("Aucun echantillon biométrique capturé.")
 

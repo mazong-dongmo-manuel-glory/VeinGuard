@@ -36,8 +36,18 @@ class SecurityController:
         self.camera = AccessCamera()
         self.auto_light_enabled = True
         self.manual_light_enabled = False
+        self.preview_stream_until = 0.0
 
         self.boot_sequence()
+
+    def start_preview_stream(self, duration_seconds: float) -> None:
+        self.preview_stream_until = time.time() + max(float(duration_seconds), 0.0)
+
+    def stop_preview_stream(self) -> None:
+        self.preview_stream_until = 0.0
+
+    def preview_stream_active(self) -> bool:
+        return time.time() < self.preview_stream_until
 
     def boot_sequence(self) -> None:
         self.lcd.show_message(config.APP_SHORT_NAME, "Init capteurs")
@@ -50,6 +60,7 @@ class SecurityController:
         self.reset_idle()
 
     def reset_idle(self) -> None:
+        self.stop_preview_stream()
         self.sync_lighting()
         if self.auto_light_enabled:
             self.lcd.show_message(config.APP_SHORT_NAME, "Scan pret")
@@ -57,10 +68,12 @@ class SecurityController:
             self.lcd.show_message(config.APP_SHORT_NAME, "Mode manuel")
 
     def handle_scanning(self) -> None:
+        self.start_preview_stream(config.SCAN_PREVIEW_SECONDS)
         self.sync_lighting(force_on=True)
         self.lcd.show_message("Analyse en cours", "Ne bouge pas")
 
     def handle_enrollment(self, user_id: str) -> None:
+        self.start_preview_stream(config.ENROLLMENT_PREVIEW_SECONDS)
         self.sync_lighting(force_on=True)
         self.lcd.show_message("Enrolement", user_id[: config.LCD_COLS])
 
@@ -112,7 +125,7 @@ class SecurityController:
     def sensor_snapshot(self, include_preview: bool = False) -> dict:
         lighting = self.sync_lighting()
         camera_snapshot = self.camera.snapshot()
-        if include_preview:
+        if include_preview or self.preview_stream_active():
             camera_snapshot["preview_jpeg_base64"] = self.camera.capture_preview_base64(
                 width=config.CAMERA_PREVIEW_WIDTH,
                 quality=config.CAMERA_PREVIEW_QUALITY,
@@ -133,7 +146,12 @@ class SecurityController:
             "camera": camera_snapshot,
         }
 
-    def capture_attempt(self, claimed_user_id: str | None = None, persist_preview: bool = True) -> dict:
+    def capture_attempt(
+        self,
+        claimed_user_id: str | None = None,
+        persist_preview: bool = True,
+        profile_mode: str = "scan",
+    ) -> dict:
         self.handle_scanning()
         frame = self.camera.capture_array()
         telemetry = self.sensor_snapshot()
@@ -145,7 +163,7 @@ class SecurityController:
             self.camera.capture_to_file(preview_path)
 
         # Precompute profile to surface segmentation failures early.
-        profile = build_multimodal_profile(frame)
+        profile = build_multimodal_profile(frame, mode=profile_mode)
 
         return {
             "frame": frame,
