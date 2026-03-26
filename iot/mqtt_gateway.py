@@ -213,44 +213,31 @@ class BioGuardMQTTGateway:
             enrollment_frames = []
             preview_paths = []
             last_capture_telemetry = None
-            attempts = 0
-            while len(enrollment_frames) < config.ENROLLMENT_SAMPLE_COUNT and attempts < config.ENROLLMENT_MAX_ATTEMPTS:
-                attempts += 1
-                sample_index = len(enrollment_frames) + 1
+            for sample_index in range(1, config.ENROLLMENT_SAMPLE_COUNT + 1):
                 self.publish_status(
                     "ONLINE",
                     phase="ENROLLMENT",
                     sample_index=sample_index,
                     sample_count=config.ENROLLMENT_SAMPLE_COUNT,
-                    attempts=attempts,
                 )
                 self.controller.lcd.show_message(
-                    f"Angle {sample_index}/{config.ENROLLMENT_SAMPLE_COUNT}",
+                    f"Photo {sample_index}/{config.ENROLLMENT_SAMPLE_COUNT}",
                     user_id[: config.LCD_COLS],
                 )
-                try:
-                    capture = self.controller.capture_attempt(
-                        claimed_user_id=f"{user_id}_{sample_index}",
-                        profile_mode="enrollment",
-                    )
-                    enrollment_frames.append(capture["frame"])
-                    last_capture_telemetry = capture["telemetry"]
-                    if capture["preview_path"]:
-                        preview_paths.append(capture["preview_path"])
-                except Exception as exc:
-                    logger.warning("Enrollment sample rejected for %s: %s", user_id, exc)
-                    self.publish_status(
-                        "ONLINE",
-                        phase="ENROLLMENT_RETRY",
-                        sample_index=sample_index,
-                        sample_count=config.ENROLLMENT_SAMPLE_COUNT,
-                        attempts=attempts,
-                        reason=str(exc),
-                    )
-                    self.controller.lcd.show_message("Repositionne", "la main")
+                capture = self.controller.capture_attempt(
+                    claimed_user_id=f"{user_id}_{sample_index}",
+                    profile_mode="enrollment",
+                    precompute_profile=False,
+                )
+                enrollment_frames.append(capture["frame"])
+                last_capture_telemetry = capture["telemetry"]
+                if capture["preview_path"]:
+                    preview_paths.append(capture["preview_path"])
+                self.controller.lcd.show_message(
+                    f"Capture {sample_index}",
+                    "Photo enregistree",
+                )
                 time.sleep(0.4)
-            if len(enrollment_frames) < config.ENROLLMENT_SAMPLE_COUNT:
-                raise ValueError("Nombre d'echantillons valides insuffisant pour l'enrolement.")
             profile = build_enrollment_profile(enrollment_frames)
         except Exception as exc:
             self.controller.reset_idle()

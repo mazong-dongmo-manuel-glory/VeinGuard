@@ -151,6 +151,7 @@ class SecurityController:
         claimed_user_id: str | None = None,
         persist_preview: bool = True,
         profile_mode: str = "scan",
+        precompute_profile: bool = True,
     ) -> dict:
         if profile_mode == "enrollment":
             self.start_preview_stream()
@@ -166,8 +167,10 @@ class SecurityController:
             preview_path = Path(config.CAPTURE_DIR) / f"{claimed_user_id or 'scan'}_{timestamp}.jpg"
             self.camera.capture_to_file(preview_path)
 
-        # Precompute profile to surface segmentation failures early.
-        profile = build_multimodal_profile(frame, mode=profile_mode)
+        profile = None
+        if precompute_profile:
+            # Precompute profile to surface segmentation failures early.
+            profile = build_multimodal_profile(frame, mode=profile_mode)
 
         return {
             "frame": frame,

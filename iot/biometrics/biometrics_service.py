@@ -433,13 +433,21 @@ def _merge_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def build_enrollment_profile(frames_bgr: list[np.ndarray]) -> dict[str, Any]:
-    samples = [build_multimodal_profile(frame, mode="enrollment") for frame in frames_bgr]
+    samples = []
+    rejected_samples = []
+    for index, frame in enumerate(frames_bgr, start=1):
+        try:
+            samples.append(build_multimodal_profile(frame, mode="enrollment"))
+        except Exception as exc:
+            rejected_samples.append({"sample_index": index, "reason": str(exc)})
     if not samples:
         raise ValueError("Aucun echantillon biométrique capturé.")
 
     fused = _merge_samples(samples)
     fused["samples"] = samples
     fused["sample_count"] = len(samples)
+    fused["captured_frame_count"] = len(frames_bgr)
+    fused["rejected_samples"] = rejected_samples
     fused["sample_keys"] = [sample["biometric_key"] for sample in samples]
     fused["fusion_mode"] = "multisample_average_best_descriptor"
     fused["biometric_key"] = hashlib.sha256("|".join(fused["sample_keys"]).encode("utf-8")).hexdigest()
