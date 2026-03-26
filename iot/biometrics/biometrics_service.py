@@ -309,6 +309,37 @@ def _normalize_palm_roi(
     valleys: list[tuple[int, int]],
 ) -> dict[str, Any]:
     x, y, w, h = cv2.boundingRect(contour)
+
+    def build_from_crop(
+        rotated_gray: np.ndarray,
+        rotated_mask: np.ndarray,
+        crop_x1: int,
+        crop_y1: int,
+        crop_x2: int,
+        crop_y2: int,
+        rotation_degrees: float,
+        alignment_method: str,
+        aligned_valleys: list[list[int]],
+    ) -> dict[str, Any]:
+        cropped_gray = rotated_gray[crop_y1:crop_y2, crop_x1:crop_x2]
+        cropped_mask = rotated_mask[crop_y1:crop_y2, crop_x1:crop_x2]
+        if cropped_gray.size == 0 or cropped_mask.size == 0:
+            raise ValueError("ROI palmaire vide apres alignement.")
+
+        size = max(64, int(config.PALM_CODE_SIZE))
+        normalized_gray = cv2.resize(cropped_gray, (size, size), interpolation=cv2.INTER_LINEAR)
+        normalized_mask = cv2.resize(cropped_mask, (size, size), interpolation=cv2.INTER_NEAREST)
+        normalized_mask = np.where(normalized_mask > 0, 255, 0).astype(np.uint8)
+        return {
+            "normalized_gray": normalized_gray,
+            "normalized_mask": normalized_mask,
+            "rotation_degrees": round(float(rotation_degrees), 4),
+            "valleys": aligned_valleys,
+            "crop_rect": [int(crop_x1), int(crop_y1), int(crop_x2), int(crop_y2)],
+            "rotated_gray": rotated_gray,
+            "alignment_method": alignment_method,
+        }
+
     if len(valleys) >= 2:
         left, right = sorted(valleys[:2], key=lambda item: item[0])
     else:
@@ -350,26 +381,39 @@ def _normalize_palm_roi(
     y1 = max(int(crop_center_y - (crop_height / 2.0)), 0)
     x2 = min(x1 + crop_width, rotated_gray.shape[1])
     y2 = min(y1 + crop_height, rotated_gray.shape[0])
+    normalized = build_from_crop(
+        rotated_gray,
+        rotated_mask,
+        x1,
+        y1,
+        x2,
+        y2,
+        angle,
+        "valley_alignment",
+        [list(left), list(right)],
+    )
+    mask_fill_ratio = np.count_nonzero(normalized["normalized_mask"]) / float(max(normalized["normalized_mask"].size, 1))
+    if mask_fill_ratio >= 0.05:
+        normalized["rotated_contour"] = rotated_contour
+        return normalized
 
-    cropped_gray = rotated_gray[y1:y2, x1:x2]
-    cropped_mask = rotated_mask[y1:y2, x1:x2]
-    if cropped_gray.size == 0 or cropped_mask.size == 0:
-        raise ValueError("ROI palmaire vide apres alignement.")
-
-    size = max(64, int(config.PALM_CODE_SIZE))
-    normalized_gray = cv2.resize(cropped_gray, (size, size), interpolation=cv2.INTER_LINEAR)
-    normalized_mask = cv2.resize(cropped_mask, (size, size), interpolation=cv2.INTER_NEAREST)
-    normalized_mask = np.where(normalized_mask > 0, 255, 0).astype(np.uint8)
-
-    return {
-        "normalized_gray": normalized_gray,
-        "normalized_mask": normalized_mask,
-        "rotation_degrees": round(float(angle), 4),
-        "valleys": [list(left), list(right)],
-        "rotated_contour": rotated_contour,
-        "crop_rect": [int(x1), int(y1), int(x2), int(y2)],
-        "rotated_gray": rotated_gray,
-    }
+    fallback_x = max(int(x - w * 0.10), 0)
+    fallback_y = max(int(y + h * 0.12), 0)
+    fallback_w = min(int(w * 1.20), gray_frame.shape[1] - fallback_x)
+    fallback_h = min(int(h * 0.78), gray_frame.shape[0] - fallback_y)
+    fallback = build_from_crop(
+        gray_frame,
+        hand_mask,
+        fallback_x,
+        fallback_y,
+        fallback_x + fallback_w,
+        fallback_y + fallback_h,
+        0.0,
+        "bbox_fallback",
+        [list(left), list(right)],
+    )
+    fallback["rotated_contour"] = contour
+    return fallback
 
 
 def _enhance_palm_lines(normalized_gray: np.ndarray, normalized_mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -569,6 +613,16 @@ def _capture_validation(geometry: dict[str, Any], quality: dict[str, Any], mode:
         "quality_score": quality["score"] >= float(rules["min_capture_quality"]),
     }
     failed_checks = [name for name, passed in checks.items() if not passed]
+    if mode == "enrollment" and failed_checks:
+        non_critical = {
+            "mask_fill_ratio",
+            "active_blocks",
+            "line_strength",
+            "orientation_confidence",
+            "quality_score",
+        }
+        if set(failed_checks).issubset(non_critical):
+            failed_checks = []
     reason_map = {
         "hand_area_ratio": "main trop dominante dans le cadre",
         "mask_fill_ratio": "paume absente ou hors cadrage",
@@ -764,6 +818,7 @@ def _analyze_profile(frame_bgr: np.ndarray, mode: str = "scan") -> dict[str, Any
                 "rotation_degrees": normalized["rotation_degrees"],
                 "valleys": normalized["valleys"],
                 "roi_size": [int(normalized["normalized_gray"].shape[1]), int(normalized["normalized_gray"].shape[0])],
+                "method": normalized.get("alignment_method", "valley_alignment"),
             },
         },
         "surface_texture": {

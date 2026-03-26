@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -86,6 +87,8 @@ export default function VeinScanBiometrics({ navigation }) {
   const isConnected = useMqttStore((state) => state.isConnected);
   const gatewayOnline = useMqttStore((state) => state.gatewayOnline);
   const triggerScan = useMqttStore((state) => state.triggerScan);
+  const startCameraPreview = useMqttStore((state) => state.startCameraPreview);
+  const stopCameraPreview = useMqttStore((state) => state.stopCameraPreview);
   const telemetry = useMqttStore((state) => state.telemetry);
   const lastScanResult = useMqttStore((state) => state.lastScanResult);
   const previewBase64 = telemetry?.camera?.processed_jpeg_base64 || telemetry?.camera?.preview_jpeg_base64;
@@ -109,6 +112,32 @@ export default function VeinScanBiometrics({ navigation }) {
     }
   }, [scanning]);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      let cancelled = false;
+
+      const openPreview = async () => {
+        if (!serverAvailable) {
+          return;
+        }
+        try {
+          await startCameraPreview('scan', userId.trim() || undefined);
+        } catch {
+          if (!cancelled) {
+            // Keep the screen usable even if preview startup fails.
+          }
+        }
+      };
+
+      openPreview();
+
+      return () => {
+        cancelled = true;
+        stopCameraPreview().catch(() => {});
+      };
+    }, [serverAvailable, startCameraPreview, stopCameraPreview, userId]),
+  );
+
   const handleScanToggle = async () => {
     if (!serverAvailable) {
         Alert.alert(t('veinScan.offlineTitle'), t('veinScan.offlineDesc'));
@@ -127,9 +156,11 @@ export default function VeinScanBiometrics({ navigation }) {
         } catch (error) {
           setScanning(false);
           Alert.alert(t('veinScan.scanErrorTitle'), t('veinScan.identificationFailedDesc'));
+          startCameraPreview('scan', userId.trim() || undefined).catch(() => {});
           return;
         }
         setScanning(false);
+        startCameraPreview('scan', userId.trim() || undefined).catch(() => {});
     } else {
         setScanning(false);
     }

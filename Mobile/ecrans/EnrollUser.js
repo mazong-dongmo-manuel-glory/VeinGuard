@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -66,6 +67,8 @@ export default function EnrollUser({ navigation, route }) {
   const isConnected = useMqttStore((state) => state.isConnected);
   const enrollUser = useMqttStore((state) => state.enrollUser);
   const updateUser = useMqttStore((state) => state.updateUser);
+  const startCameraPreview = useMqttStore((state) => state.startCameraPreview);
+  const stopCameraPreview = useMqttStore((state) => state.stopCameraPreview);
   const telemetry = useMqttStore((state) => state.telemetry);
   const statusPayload = useMqttStore((state) => state.statusPayload);
 
@@ -88,6 +91,32 @@ export default function EnrollUser({ navigation, route }) {
     ? Number(statusPayload?.sample_index || 0)
     : 0;
   const enrollmentTarget = Number(statusPayload?.sample_count || 5);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let cancelled = false;
+
+      const openPreview = async () => {
+        if (!isConnected) {
+          return;
+        }
+        try {
+          await startCameraPreview('enrollment', employeeId || undefined);
+        } catch {
+          if (!cancelled) {
+            // Do not break the screen if preview startup fails.
+          }
+        }
+      };
+
+      openPreview();
+
+      return () => {
+        cancelled = true;
+        stopCameraPreview().catch(() => {});
+      };
+    }, [employeeId, isConnected, startCameraPreview, stopCameraPreview]),
+  );
 
   const handleCompleteEnrollment = async () => {
     if (!isConnected) {
@@ -140,6 +169,7 @@ export default function EnrollUser({ navigation, route }) {
       Alert.alert(successTitle, successMessage, [{ text: t('common.ok'), onPress: () => navigation.goBack() }]);
     } catch (err) {
       Alert.alert(t('common.error'), getAppErrorMessage(t, err, 'enrollment.enrollmentErrorDesc'));
+      startCameraPreview('enrollment', employeeId || undefined).catch(() => {});
     } finally {
       setSubmitting(false);
     }
