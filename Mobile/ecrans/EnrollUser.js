@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   View,
@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, GRADIENTS } from '../theme';
 import { getAppErrorMessage } from '../services/appErrors';
 import { useMqttStore } from '../store/mqttStore';
@@ -66,6 +67,8 @@ export default function EnrollUser({ navigation, route }) {
   const isConnected = useMqttStore((state) => state.isConnected);
   const enrollUser = useMqttStore((state) => state.enrollUser);
   const updateUser = useMqttStore((state) => state.updateUser);
+  const startCameraPreview = useMqttStore((state) => state.startCameraPreview);
+  const stopCameraPreview = useMqttStore((state) => state.stopCameraPreview);
   const telemetry = useMqttStore((state) => state.telemetry);
   const statusPayload = useMqttStore((state) => state.statusPayload);
 
@@ -88,6 +91,18 @@ export default function EnrollUser({ navigation, route }) {
     ? Number(statusPayload?.sample_index || 0)
     : 0;
   const enrollmentTarget = Number(statusPayload?.sample_count || 5);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isConnected && mode !== 'edit') {
+        startCameraPreview('enrollment', employeeId || undefined).catch(() => {});
+      }
+
+      return () => {
+        stopCameraPreview().catch(() => {});
+      };
+    }, [employeeId, isConnected, mode, startCameraPreview, stopCameraPreview])
+  );
 
   const handleCompleteEnrollment = async () => {
     if (!isConnected) {
@@ -139,6 +154,9 @@ export default function EnrollUser({ navigation, route }) {
 
       Alert.alert(successTitle, successMessage, [{ text: t('common.ok'), onPress: () => navigation.goBack() }]);
     } catch (err) {
+      if (mode !== 'edit') {
+        startCameraPreview('enrollment', employeeId || undefined).catch(() => {});
+      }
       Alert.alert(t('common.error'), getAppErrorMessage(t, err, 'enrollment.enrollmentErrorDesc'));
     } finally {
       setSubmitting(false);

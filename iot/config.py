@@ -49,6 +49,7 @@ MQTT_CMD_LOGS = topic("cmd/access/logs")
 MQTT_CMD_AUDIT = topic("cmd/audit/list")
 MQTT_CMD_SETTINGS = topic("cmd/settings/update")
 MQTT_CMD_PING = topic("cmd/ping")
+MQTT_CMD_CAMERA_PREVIEW = topic("cmd/camera/preview")
 
 
 def response_topic(command: str, client_id: str) -> str:
@@ -75,7 +76,7 @@ LIGHT_SENSOR_SAMPLES = int(os.getenv("VG_LIGHT_SENSOR_SAMPLES", "5"))
 LIGHT_SENSOR_DARK_RATIO = float(os.getenv("VG_LIGHT_SENSOR_DARK_RATIO", "1.25"))
 
 # Biometrics
-MATCH_THRESHOLD = float(os.getenv("VG_MATCH_THRESHOLD", "0.30"))
+MATCH_THRESHOLD = float(os.getenv("VG_MATCH_THRESHOLD", "0.36"))
 MIN_HAND_AREA = int(os.getenv("VG_MIN_HAND_AREA", "3500"))
 CAMERA_WIDTH = int(os.getenv("VG_CAMERA_WIDTH", "640"))
 CAMERA_HEIGHT = int(os.getenv("VG_CAMERA_HEIGHT", "480"))

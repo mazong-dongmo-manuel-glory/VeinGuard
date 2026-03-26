@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   View,
@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, GRADIENTS } from '../theme';
 import { getAppErrorMessage } from '../services/appErrors';
 import { useMqttStore } from '../store/mqttStore';
@@ -70,6 +71,8 @@ export default function VeinScanBiometrics({ navigation }) {
   const isConnected = useMqttStore((state) => state.isConnected);
   const gatewayOnline = useMqttStore((state) => state.gatewayOnline);
   const triggerScan = useMqttStore((state) => state.triggerScan);
+  const startCameraPreview = useMqttStore((state) => state.startCameraPreview);
+  const stopCameraPreview = useMqttStore((state) => state.stopCameraPreview);
   const telemetry = useMqttStore((state) => state.telemetry);
   const lastScanResult = useMqttStore((state) => state.lastScanResult);
   const previewBase64 = telemetry?.camera?.preview_jpeg_base64;
@@ -93,8 +96,20 @@ export default function VeinScanBiometrics({ navigation }) {
     }
   }, [scanning]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (isConnected) {
+        startCameraPreview('scan').catch(() => {});
+      }
+
+      return () => {
+        stopCameraPreview().catch(() => {});
+      };
+    }, [isConnected, startCameraPreview, stopCameraPreview])
+  );
+
   const handleScanToggle = async () => {
-    if (!isConnected) {
+    if (!serverAvailable) {
         Alert.alert(t('veinScan.offlineTitle'), t('veinScan.offlineDesc'));
         return;
     }
@@ -106,9 +121,11 @@ export default function VeinScanBiometrics({ navigation }) {
           if (response?.status === 'success') {
             navigation?.navigate('AccessDecision', { event: response.event });
           } else {
+            startCameraPreview('scan').catch(() => {});
             Alert.alert(t('veinScan.scanErrorTitle'), getAppErrorMessage(t, response?.reason, 'veinScan.scanErrorDesc'));
           }
         } catch (error) {
+          startCameraPreview('scan').catch(() => {});
           setScanning(false);
           Alert.alert(t('veinScan.scanErrorTitle'), getAppErrorMessage(t, error, 'veinScan.scanErrorDesc'));
           return;

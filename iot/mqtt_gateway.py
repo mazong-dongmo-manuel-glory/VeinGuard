@@ -88,6 +88,8 @@ class BioGuardMQTTGateway:
             self.handle_settings_update_command(data)
         elif topic == config.MQTT_CMD_PING:
             self.publish_status("ALIVE")
+        elif topic == config.MQTT_CMD_CAMERA_PREVIEW:
+            self.handle_camera_preview_command(data)
 
     def handle_scan_command(self, data: dict) -> None:
         client_id = data.get("client_id", "anonymous")
@@ -95,8 +97,14 @@ class BioGuardMQTTGateway:
         user_id = data.get("user_id")
 
         try:
+            self.controller.handle_scanning()
+            self._publish_preview_frames(frame_count=4, interval_seconds=0.18)
             try:
-                capture = self.controller.capture_attempt(claimed_user_id=user_id)
+                capture = self.controller.capture_attempt(
+                    claimed_user_id=user_id,
+                    activate_mode=False,
+                )
+                self._publish_telemetry_payload(capture["telemetry"])
             except Exception as exc:
                 self.controller.handle_access_denied("Main absente")
                 self._record_access(
@@ -224,13 +232,16 @@ class BioGuardMQTTGateway:
                     f"Photo {sample_index}/{config.ENROLLMENT_SAMPLE_COUNT}",
                     user_id[: config.LCD_COLS],
                 )
+                self._publish_preview_frames(frame_count=2, interval_seconds=0.15)
                 capture = self.controller.capture_attempt(
                     claimed_user_id=f"{user_id}_{sample_index}",
                     profile_mode="enrollment",
                     precompute_profile=False,
+                    activate_mode=False,
                 )
                 enrollment_frames.append(capture["frame"])
                 last_capture_telemetry = capture["telemetry"]
+                self._publish_telemetry_payload(capture["telemetry"])
                 if capture["preview_path"]:
                     preview_paths.append(capture["preview_path"])
                 self.controller.lcd.show_message(
@@ -286,6 +297,46 @@ class BioGuardMQTTGateway:
             ),
         )
         self.controller.reset_idle()
+
+    def handle_camera_preview_command(self, data: dict) -> None:
+        client_id = data.get("client_id", "anonymous")
+        response_topic = config.response_topic("camera/preview", client_id)
+        action = str(data.get("action", "start")).strip().lower()
+        mode = str(data.get("mode", "scan")).strip().lower()
+        user_id = data.get("user_id")
+
+        try:
+            if action == "stop":
+                telemetry = self.controller.stop_preview_session()
+            else:
+                telemetry = self.controller.start_preview_session(mode=mode, user_id=user_id)
+                self._publish_preview_frames(frame_count=2, interval_seconds=0.15)
+                telemetry = self.controller.sensor_snapshot(include_preview=True)
+
+            self._publish_telemetry_payload(telemetry)
+            self.client.publish(
+                response_topic,
+                json.dumps(
+                    {
+                        "status": "success",
+                        "action": action,
+                        "mode": mode,
+                        "telemetry": telemetry,
+                    }
+                ),
+            )
+        except Exception as exc:
+            self.client.publish(
+                response_topic,
+                json.dumps(
+                    {
+                        "status": "error",
+                        "action": action,
+                        "mode": mode,
+                        "error": str(exc),
+                    }
+                ),
+            )
 
     def handle_login_command(self, data: dict) -> None:
         client_id = data.get("client_id", "anonymous")
@@ -437,11 +488,19 @@ class BioGuardMQTTGateway:
         payload.update(extra)
         self.client.publish(config.MQTT_TOPIC_STATUS, json.dumps(payload))
 
-    def publish_telemetry(self) -> None:
-        payload = self.controller.sensor_snapshot()
+    def _publish_telemetry_payload(self, payload: dict) -> None:
         database.update_device_state("last_telemetry", payload)
         self.firebase.save_telemetry(config.DEVICE_ID, payload)
         self.client.publish(config.MQTT_TOPIC_TELEMETRY, json.dumps(payload))
+
+    def publish_telemetry(self) -> None:
+        self._publish_telemetry_payload(self.controller.sensor_snapshot())
+
+    def _publish_preview_frames(self, frame_count: int = 3, interval_seconds: float = 0.2) -> None:
+        for index in range(max(0, int(frame_count))):
+            self._publish_telemetry_payload(self.controller.sensor_snapshot(include_preview=True))
+            if index < frame_count - 1:
+                time.sleep(max(0.0, float(interval_seconds)))
 
     def _record_access(
         self,

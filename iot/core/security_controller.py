@@ -77,6 +77,17 @@ class SecurityController:
         self.sync_lighting(force_on=True)
         self.lcd.show_message("Enrolement", user_id[: config.LCD_COLS])
 
+    def start_preview_session(self, mode: str = "scan", user_id: str | None = None) -> dict:
+        if mode == "enrollment":
+            self.handle_enrollment(user_id or "PREVIEW")
+        else:
+            self.handle_scanning()
+        return self.sensor_snapshot(include_preview=True)
+
+    def stop_preview_session(self) -> dict:
+        self.reset_idle()
+        return self.sensor_snapshot()
+
     def handle_access_granted(self, username: str = "UTILISATEUR", score: float | None = None) -> None:
         label = username[: config.LCD_COLS]
         line2 = f"Score {score:.2f}"[: config.LCD_COLS] if score is not None else "Bienvenue"
@@ -152,12 +163,14 @@ class SecurityController:
         persist_preview: bool = True,
         profile_mode: str = "scan",
         precompute_profile: bool = True,
+        activate_mode: bool = True,
     ) -> dict:
-        if profile_mode == "enrollment":
-            self.start_preview_stream()
-            self.sync_lighting(force_on=True)
-        else:
-            self.handle_scanning()
+        if activate_mode:
+            if profile_mode == "enrollment":
+                self.start_preview_stream()
+                self.sync_lighting(force_on=True)
+            else:
+                self.handle_scanning()
         frame = self.camera.capture_array()
         telemetry = self.sensor_snapshot()
         preview_path = None

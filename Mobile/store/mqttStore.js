@@ -181,6 +181,7 @@ export const useMqttStore = create((set, get) => ({
         client.subscribe(responseTopic('audit/list', get().clientId));
         client.subscribe(responseTopic('access/scan', get().clientId));
         client.subscribe(responseTopic('users/enroll', get().clientId));
+        client.subscribe(responseTopic('camera/preview', get().clientId));
         client.subscribe(responseTopic('settings/update', get().clientId));
         client.subscribe(MQTT_TOPICS.status);
         client.subscribe(MQTT_TOPICS.telemetry);
@@ -421,6 +422,38 @@ export const useMqttStore = create((set, get) => ({
           telemetry: response?.event?.modalities?.telemetry || get().telemetry,
         });
         await syncAccessEvent(response.event.id, response.event).catch(() => {});
+      }
+      return response;
+    }),
+
+  startCameraPreview: async (mode = 'scan', userId) =>
+    get().request(
+      MQTT_TOPICS.previewCmd,
+      responseTopic('camera/preview', get().clientId),
+      {
+        action: 'start',
+        mode,
+        ...(userId ? { user_id: userId } : {}),
+      },
+      10000
+    ).then((response) => {
+      ensureSuccessfulResponse(response, 'Unable to start camera preview');
+      if (response?.telemetry) {
+        set({ telemetry: response.telemetry });
+      }
+      return response;
+    }),
+
+  stopCameraPreview: async () =>
+    get().request(
+      MQTT_TOPICS.previewCmd,
+      responseTopic('camera/preview', get().clientId),
+      { action: 'stop' },
+      7000
+    ).then((response) => {
+      ensureSuccessfulResponse(response, 'Unable to stop camera preview');
+      if (response?.telemetry) {
+        set({ telemetry: response.telemetry });
       }
       return response;
     }),

@@ -22,6 +22,7 @@ export const MQTT_TOPICS = {
   usersUpdateCmd: topic('cmd/users/update'),
   usersDeleteCmd: topic('cmd/users/delete'),
   scanCmd: topic('cmd/access/scan'),
+  previewCmd: topic('cmd/camera/preview'),
   logsCmd: topic('cmd/access/logs'),
   auditCmd: topic('cmd/audit/list'),
   settingsCmd: topic('cmd/settings/update'),
