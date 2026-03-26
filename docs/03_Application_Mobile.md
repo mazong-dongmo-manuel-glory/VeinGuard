@@ -19,6 +19,7 @@ Le mobile sert de console d'administration et de supervision. Il permet de :
 - se connecter avec Firebase
 - créer un compte
 - conserver la session selon le choix utilisateur
+- configurer l'adresse du Raspberry Pi et les ports MQTT / WebSocket
 - gérer les utilisateurs
 - consulter l'historique d'accès
 - consulter les logs d'audit
@@ -48,6 +49,21 @@ L'application utilise Firebase Authentication avec :
 - option "rester connecté"
 
 Les identifiants de session persistante sont gérés avec `SecureStore` et le drapeau de persistance avec `AsyncStorage`.
+
+## Configuration du serveur Raspberry Pi
+
+L'application mobile permet de modifier la connexion MQTT :
+
+- dès l'écran de connexion
+- depuis l'écran des paramètres
+
+Les éléments configurables sont :
+
+- l'adresse IP ou le nom d'hôte du Raspberry Pi
+- le port WebSocket MQTT utilisé par le mobile
+- le port MQTT TCP de référence du backend
+
+Cette configuration est persistée localement et la reconnexion MQTT est relancée automatiquement après modification.
 
 ## Préférences utilisateur
 

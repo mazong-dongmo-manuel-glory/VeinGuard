@@ -1,9 +1,13 @@
 export const APP_NAME = 'BioGuard Access';
 
-export const MQTT_BROKER_URL = 'ws://172.16.9.115:9001';
-export const MQTT_USERNAME = 'admin';
-export const MQTT_PASSWORD = 'admin1234';
+export const MQTT_DEFAULT_HOST = '172.16.9.115';
+export const MQTT_DEFAULT_WS_PORT = '9090';
+export const MQTT_DEFAULT_PORT = '1883';
+export const MQTT_DEFAULT_USERNAME = 'admin';
+export const MQTT_DEFAULT_PASSWORD = 'admin1234';
 export const MQTT_TOPIC_PREFIX = 'bioguard';
+
+export const buildMqttBrokerUrl = ({ host, wsPort }) => `ws://${host}:${wsPort}`;
 
 export const topic = (path) => `${MQTT_TOPIC_PREFIX}/${path.replace(/^\/+/, '')}`;
 export const responseTopic = (command, clientId) =>

@@ -1,6 +1,40 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import mqtt from 'mqtt';
-import { MQTT_BROKER_URL, MQTT_PASSWORD, MQTT_TOPICS, MQTT_USERNAME, responseTopic } from '../config';
+import {
+  buildMqttBrokerUrl,
+  MQTT_DEFAULT_HOST,
+  MQTT_DEFAULT_PASSWORD,
+  MQTT_DEFAULT_PORT,
+  MQTT_DEFAULT_USERNAME,
+  MQTT_DEFAULT_WS_PORT,
+  MQTT_TOPICS,
+  responseTopic,
+} from '../config';
+
+const MQTT_CONFIG_KEY = 'mqtt_connection_config';
+
+const getDefaultBrokerConfig = () => ({
+  host: MQTT_DEFAULT_HOST,
+  wsPort: MQTT_DEFAULT_WS_PORT,
+  mqttPort: MQTT_DEFAULT_PORT,
+  username: MQTT_DEFAULT_USERNAME,
+  password: MQTT_DEFAULT_PASSWORD,
+});
+
+const sanitizeHost = (value) =>
+  String(value || '')
+    .trim()
+    .replace(/^wss?:\/\//, '')
+    .replace(/\/+$/, '');
+
+const normalizeBrokerConfig = (value = {}) => ({
+  host: sanitizeHost(value.host) || MQTT_DEFAULT_HOST,
+  wsPort: String(value.wsPort || MQTT_DEFAULT_WS_PORT).trim() || MQTT_DEFAULT_WS_PORT,
+  mqttPort: String(value.mqttPort || MQTT_DEFAULT_PORT).trim() || MQTT_DEFAULT_PORT,
+  username: String(value.username ?? MQTT_DEFAULT_USERNAME).trim() || MQTT_DEFAULT_USERNAME,
+  password: String(value.password ?? MQTT_DEFAULT_PASSWORD),
+});
 
 export const useMqttStore = create((set, get) => ({
   client: null,
@@ -8,21 +42,74 @@ export const useMqttStore = create((set, get) => ({
   status: 'OFFLINE',
   telemetry: null,
   settingsAck: null,
+  lastError: null,
+  configReady: false,
+  brokerConfig: getDefaultBrokerConfig(),
   clientId: `mobile-${Math.random().toString(16).slice(2, 10)}`,
 
-  connect: () => {
+  bootstrap: async () => {
+    try {
+      const raw = await AsyncStorage.getItem(MQTT_CONFIG_KEY);
+      const saved = raw ? JSON.parse(raw) : {};
+      set({
+        brokerConfig: normalizeBrokerConfig(saved),
+        configReady: true,
+      });
+    } catch {
+      set({
+        brokerConfig: getDefaultBrokerConfig(),
+        configReady: true,
+      });
+    }
+  },
+
+  disconnect: () => {
+    const client = get().client;
+    if (client) {
+      try {
+        client.end(true);
+      } catch {}
+    }
+    set({ client: null, isConnected: false, status: 'OFFLINE' });
+  },
+
+  updateBrokerConfig: async (partialConfig, reconnect = true) => {
+    const nextConfig = normalizeBrokerConfig({
+      ...get().brokerConfig,
+      ...partialConfig,
+    });
+
+    await AsyncStorage.setItem(MQTT_CONFIG_KEY, JSON.stringify(nextConfig));
+    set({ brokerConfig: nextConfig });
+
+    if (reconnect) {
+      get().disconnect();
+      await get().connect();
+    }
+
+    return nextConfig;
+  },
+
+  connect: async () => {
+    if (!get().configReady) {
+      await get().bootstrap();
+    }
+
     if (get().client) return;
 
-    const client = mqtt.connect(MQTT_BROKER_URL, {
+    const brokerConfig = normalizeBrokerConfig(get().brokerConfig);
+    const brokerUrl = buildMqttBrokerUrl(brokerConfig);
+
+    const client = mqtt.connect(brokerUrl, {
       clientId: get().clientId,
       clean: true,
       reconnectPeriod: 5000,
-      username: MQTT_USERNAME,
-      password: MQTT_PASSWORD,
+      username: brokerConfig.username || undefined,
+      password: brokerConfig.password || undefined,
     });
 
     client.on('connect', () => {
-      set({ isConnected: true, status: 'ONLINE' });
+      set({ isConnected: true, status: 'ONLINE', lastError: null });
       client.subscribe(responseTopic('auth/login', get().clientId));
       client.subscribe(responseTopic('users/list', get().clientId));
       client.subscribe(responseTopic('users/update', get().clientId));
@@ -60,15 +147,31 @@ export const useMqttStore = create((set, get) => ({
     });
 
     client.on('close', () => set({ isConnected: false, status: 'OFFLINE', client: null }));
-    client.on('error', () => set({ isConnected: false, status: 'ERROR' }));
+    client.on('error', (error) => set({ isConnected: false, status: 'ERROR', lastError: error?.message || 'MQTT error' }));
 
     set({ client });
   },
 
   request: async (cmdTopic, resTopic, payload, timeout = 7000) => {
-    const { client } = get();
+    let { client } = get();
     if (!client || !get().isConnected) {
-      throw new Error('MQTT not connected');
+      get().disconnect();
+      await get().connect();
+
+      const startedAt = Date.now();
+      while (!get().isConnected && Date.now() - startedAt < 8000) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+
+      if (!get().isConnected) {
+        throw new Error(get().lastError || 'MQTT not connected');
+      }
+
+      client = get().client;
+    }
+
+    if (!client) {
+      throw new Error('MQTT client unavailable');
     }
 
     return new Promise((resolve, reject) => {

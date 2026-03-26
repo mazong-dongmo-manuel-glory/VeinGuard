@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import socket
 import time
 import uuid
 from datetime import datetime, timezone
@@ -19,11 +20,21 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger(__name__)
 
 
+def resolve_local_ip() -> str:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            return sock.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
+
+
 class BioGuardMQTTGateway:
     def __init__(self):
         database.init_db()
         self.controller = SecurityController()
         self.firebase = FirebaseService()
+        self.local_ip = resolve_local_ip()
         self.client = mqtt.Client()
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
@@ -33,6 +44,8 @@ class BioGuardMQTTGateway:
             logger.info("Using MQTT credentials for user %s", config.MQTT_USERNAME)
 
         logger.info("Connecting to MQTT broker at %s:%s", config.MQTT_BROKER, config.MQTT_PORT)
+        logger.info("Broker local TCP endpoint: mqtt://%s:%s", self.local_ip, config.MQTT_PORT)
+        logger.info("Broker local WebSocket endpoint: ws://%s:%s", self.local_ip, config.MQTT_WS_PORT)
         self.client.connect(config.MQTT_BROKER, config.MQTT_PORT, config.MQTT_KEEPALIVE)
 
     def on_connect(self, client, userdata, flags, rc):
@@ -342,6 +355,9 @@ class BioGuardMQTTGateway:
             "status": status,
             "device_id": config.DEVICE_ID,
             "app": config.APP_NAME,
+            "local_ip": self.local_ip,
+            "mqtt_port": config.MQTT_PORT,
+            "mqtt_ws_port": config.MQTT_WS_PORT,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         self.client.publish(config.MQTT_TOPIC_STATUS, json.dumps(payload))

@@ -22,6 +22,7 @@ MOCK_MODE = os.getenv("VG_MOCK_MODE", "0").lower() in {"1", "true", "yes", "on"}
 # MQTT
 MQTT_BROKER = os.getenv("VG_MQTT_BROKER", "localhost")
 MQTT_PORT = int(os.getenv("VG_MQTT_PORT", "1883"))
+MQTT_WS_PORT = int(os.getenv("VG_MQTT_WS_PORT", "9090"))
 MQTT_KEEPALIVE = int(os.getenv("VG_MQTT_KEEPALIVE", "60"))
 MQTT_TOPIC_PREFIX = os.getenv("VG_TOPIC_PREFIX", "bioguard")
 MQTT_USERNAME = os.getenv("VG_MQTT_USERNAME", "admin").strip()

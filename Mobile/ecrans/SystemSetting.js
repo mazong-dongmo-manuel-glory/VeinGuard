@@ -53,6 +53,8 @@ export default function SystemSetting({ navigation }) {
   const isConnected = useMqttStore((state) => state.isConnected);
   const telemetry = useMqttStore((state) => state.telemetry);
   const updateSystemSettings = useMqttStore((state) => state.updateSystemSettings);
+  const brokerConfig = useMqttStore((state) => state.brokerConfig);
+  const updateBrokerConfig = useMqttStore((state) => state.updateBrokerConfig);
   const preferences = useAuthStore((state) => state.preferences);
   const updatePreferences = useAuthStore((state) => state.updatePreferences);
 
@@ -63,6 +65,9 @@ export default function SystemSetting({ navigation }) {
   const [darkRatio, setDarkRatio] = useState('1.25');
   const [lcdLine1, setLcdLine1] = useState('BioGuard');
   const [lcdLine2, setLcdLine2] = useState('');
+  const [serverHost, setServerHost] = useState('');
+  const [serverWsPort, setServerWsPort] = useState('');
+  const [serverMqttPort, setServerMqttPort] = useState('');
 
   useEffect(() => {
     if (!telemetry) return;
@@ -78,6 +83,12 @@ export default function SystemSetting({ navigation }) {
     }
     setLcdLine2(telemetry.lcd?.line2 || '');
   }, [telemetry]);
+
+  useEffect(() => {
+    setServerHost(brokerConfig.host || '');
+    setServerWsPort(String(brokerConfig.wsPort || ''));
+    setServerMqttPort(String(brokerConfig.mqttPort || ''));
+  }, [brokerConfig]);
 
   const sendSettings = async (payload, successMessage = t('systemSettings.hardwareCommandSent')) => {
     if (!isConnected) {
@@ -98,6 +109,24 @@ export default function SystemSetting({ navigation }) {
       await updatePreferences(patch);
     } catch (error) {
       Alert.alert(t('common.error'), error?.message || t('systemSettings.preferencesError'));
+    }
+  };
+
+  const handleConnectionSave = async () => {
+    if (!serverHost.trim() || !serverWsPort.trim() || !serverMqttPort.trim()) {
+      Alert.alert(t('common.error'), t('systemSettings.connectionRequired'));
+      return;
+    }
+
+    try {
+      await updateBrokerConfig({
+        host: serverHost.trim(),
+        wsPort: serverWsPort.trim(),
+        mqttPort: serverMqttPort.trim(),
+      });
+      Alert.alert(t('common.success'), t('systemSettings.connectionSaved'));
+    } catch (error) {
+      Alert.alert(t('common.error'), error?.message || t('systemSettings.connectionError'));
     }
   };
 
@@ -211,6 +240,30 @@ export default function SystemSetting({ navigation }) {
               color={COLORS.neonCyan}
             />
             <Text style={styles.helperText}>{t('systemSettings.prefPersistenceNote')}</Text>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <SectionHeader icon="globe-outline" title={t('systemSettings.connectionTitle')} color={COLORS.neonCyan} />
+          <View style={styles.cardContent}>
+            <Text style={styles.helperText}>{t('systemSettings.connectionDesc')}</Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>{t('systemSettings.connectionHost')}</Text>
+              <TextInput style={styles.textInput} value={serverHost} onChangeText={setServerHost} autoCapitalize="none" />
+            </View>
+            <View style={styles.portRow}>
+              <View style={[styles.inputGroup, styles.portGroup]}>
+                <Text style={styles.inputLabel}>{t('systemSettings.connectionWsPort')}</Text>
+                <TextInput style={styles.textInput} value={serverWsPort} onChangeText={setServerWsPort} keyboardType="number-pad" />
+              </View>
+              <View style={[styles.inputGroup, styles.portGroup]}>
+                <Text style={styles.inputLabel}>{t('systemSettings.connectionTcpPort')}</Text>
+                <TextInput style={styles.textInput} value={serverMqttPort} onChangeText={setServerMqttPort} keyboardType="number-pad" />
+              </View>
+            </View>
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleConnectionSave}>
+              <Text style={styles.primaryBtnText}>{t('systemSettings.connectionSave')}</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -347,6 +400,8 @@ const styles = StyleSheet.create({
   settingLabel: { color: COLORS.white, fontSize: 14, fontWeight: '800' },
   settingDesc: { color: COLORS.textDim, fontSize: 11, lineHeight: 16, marginTop: 4 },
   inputGroup: { gap: 8 },
+  portRow: { flexDirection: 'row', gap: 12 },
+  portGroup: { flex: 1 },
   inputLabel: { color: COLORS.textDim, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   textInput: {
     height: 50,

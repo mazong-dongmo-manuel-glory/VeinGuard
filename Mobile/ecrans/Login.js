@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { BlurView } from 'expo-blur';
 import { COLORS, GRADIENTS, SHADOWS } from '../theme';
 import { getFirebaseAuthErrorMessage, requestPasswordReset } from '../services/auth';
 import { useAuthStore } from '../store/authStore';
+import { useMqttStore } from '../store/mqttStore';
 
 export default function Login({ navigation }) {
   const { t } = useTranslation();
@@ -29,8 +30,20 @@ export default function Login({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberSession, setRememberSession] = useState(true);
   const [isSignupMode, setIsSignupMode] = useState(false);
+  const [serverHost, setServerHost] = useState('');
+  const [serverWsPort, setServerWsPort] = useState('');
+  const [serverMqttPort, setServerMqttPort] = useState('');
   const login = useAuthStore((state) => state.login);
   const signup = useAuthStore((state) => state.signup);
+  const isConnected = useMqttStore((state) => state.isConnected);
+  const brokerConfig = useMqttStore((state) => state.brokerConfig);
+  const updateBrokerConfig = useMqttStore((state) => state.updateBrokerConfig);
+
+  useEffect(() => {
+    setServerHost(brokerConfig.host || '');
+    setServerWsPort(String(brokerConfig.wsPort || ''));
+    setServerMqttPort(String(brokerConfig.mqttPort || ''));
+  }, [brokerConfig]);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -71,6 +84,24 @@ export default function Login({ navigation }) {
       Alert.alert(t('common.success'), t('login.resetPasswordDesc'));
     } catch (error) {
       Alert.alert(t('common.error'), getFirebaseAuthErrorMessage(error));
+    }
+  };
+
+  const handleSaveServerConfig = async () => {
+    if (!serverHost.trim() || !serverWsPort.trim() || !serverMqttPort.trim()) {
+      Alert.alert(t('common.error'), t('login.serverConfigRequired'));
+      return;
+    }
+
+    try {
+      await updateBrokerConfig({
+        host: serverHost.trim(),
+        wsPort: serverWsPort.trim(),
+        mqttPort: serverMqttPort.trim(),
+      });
+      Alert.alert(t('common.success'), t('login.serverConfigSaved'));
+    } catch (error) {
+      Alert.alert(t('common.error'), error?.message || t('login.serverConfigError'));
     }
   };
 
@@ -183,6 +214,62 @@ export default function Login({ navigation }) {
                 <Text style={styles.rememberText}>{t('login.rememberSession')}</Text>
               </TouchableOpacity>
 
+              <View style={styles.serverCard}>
+                <View style={styles.serverHeader}>
+                  <Text style={styles.serverTitle}>{t('login.serverConfigTitle')}</Text>
+                  <Text style={[styles.serverStatus, { color: isConnected ? COLORS.neonGreen : COLORS.neonRed }]}>
+                    {isConnected ? t('common.online') : t('common.offline')}
+                  </Text>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>{t('login.serverHostLabel')}</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="desktop-outline" size={20} color={COLORS.neonCyan} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      value={serverHost}
+                      onChangeText={setServerHost}
+                      autoCapitalize="none"
+                      placeholder={t('login.serverHostPlaceholder')}
+                      placeholderTextColor={COLORS.textDim}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.serverPortRow}>
+                  <View style={[styles.inputGroup, styles.serverPortGroup]}>
+                    <Text style={styles.label}>{t('login.serverWsPortLabel')}</Text>
+                    <View style={styles.inputWrapper}>
+                      <TextInput
+                        style={styles.input}
+                        value={serverWsPort}
+                        onChangeText={setServerWsPort}
+                        keyboardType="number-pad"
+                        placeholderTextColor={COLORS.textDim}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={[styles.inputGroup, styles.serverPortGroup]}>
+                    <Text style={styles.label}>{t('login.serverTcpPortLabel')}</Text>
+                    <View style={styles.inputWrapper}>
+                      <TextInput
+                        style={styles.input}
+                        value={serverMqttPort}
+                        onChangeText={setServerMqttPort}
+                        keyboardType="number-pad"
+                        placeholderTextColor={COLORS.textDim}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                <TouchableOpacity style={styles.serverSaveBtn} onPress={handleSaveServerConfig}>
+                  <Text style={styles.serverSaveBtnText}>{t('login.serverConfigSave')}</Text>
+                </TouchableOpacity>
+              </View>
+
               {!isSignupMode && (
                 <TouchableOpacity style={styles.forgotBtn} onPress={handleForgotPassword}>
                   <Text style={styles.forgotText}>{t('login.forgotPassword')}</Text>
@@ -285,6 +372,29 @@ const styles = StyleSheet.create({
 
   rememberRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 18 },
   rememberText: { color: COLORS.textSecondary, fontSize: 13, fontWeight: '500' },
+  serverCard: {
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    marginBottom: 18,
+  },
+  serverHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 },
+  serverTitle: { color: COLORS.white, fontSize: 13, fontWeight: '800', flex: 1 },
+  serverStatus: { fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  serverPortRow: { flexDirection: 'row', gap: 12 },
+  serverPortGroup: { flex: 1 },
+  serverSaveBtn: {
+    minHeight: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 242, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 242, 255, 0.3)',
+  },
+  serverSaveBtnText: { color: COLORS.neonCyan, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
   forgotBtn: { alignSelf: 'flex-end', marginBottom: 25 },
   forgotText: { color: COLORS.neonCyan, fontSize: 13, fontWeight: '500' },
 

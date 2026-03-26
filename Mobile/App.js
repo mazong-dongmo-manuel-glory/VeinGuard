@@ -11,16 +11,18 @@ export default function App() {
   const [pret, setPret] = useState(false);
   const langue = useLangueStore((state) => state.langue);
   const connectMqtt = useMqttStore((state) => state.connect);
+  const bootstrapMqtt = useMqttStore((state) => state.bootstrap);
+  const mqttReady = useMqttStore((state) => state.configReady);
   const bootstrapAuth = useAuthStore((state) => state.bootstrap);
   const authReady = useAuthStore((state) => state.authReady);
 
   useEffect(() => {
     initI18next(langue);
-    connectMqtt();
+    bootstrapMqtt().finally(() => connectMqtt());
     bootstrapAuth().finally(() => setPret(true));
-  }, [langue, connectMqtt, bootstrapAuth]);
+  }, [langue, connectMqtt, bootstrapAuth, bootstrapMqtt]);
 
-  if (!pret || !authReady) {
+  if (!pret || !authReady || !mqttReady) {
     return (
       <View style={styles.container}>
         <Text>SPLASH SCREEN</Text>

@@ -45,7 +45,16 @@
     "createAccount": "CRÉER LE COMPTE",
     "loginInstead": "Déjà un compte ? Se connecter",
     "signupInstead": "Pas de compte ? Créer un compte",
-    "resetPasswordDesc": "Un courriel de réinitialisation a été envoyé si le compte existe."
+    "resetPasswordDesc": "Un courriel de réinitialisation a été envoyé si le compte existe.",
+    "serverConfigTitle": "SERVEUR RASPBERRY PI",
+    "serverHostLabel": "ADRESSE DU SERVEUR",
+    "serverHostPlaceholder": "ex. 192.168.1.25",
+    "serverWsPortLabel": "PORT WS",
+    "serverTcpPortLabel": "PORT MQTT",
+    "serverConfigSave": "ENREGISTRER ET RECONNECTER",
+    "serverConfigSaved": "La configuration du serveur a été enregistrée.",
+    "serverConfigRequired": "Veuillez saisir l'adresse du serveur et les deux ports.",
+    "serverConfigError": "Impossible de mettre à jour la connexion MQTT."
   },
   "dashboard": {
     "title": "STATUT DU SYSTÈME RASPBERRY PI",
@@ -203,7 +212,16 @@
     "prefTechnicalTitle": "DÉTAILS TECHNIQUES",
     "prefTechnicalDesc": "Afficher les identifiants, scores et métadonnées supplémentaires",
     "prefPersistenceNote": "Ces préférences sont enregistrées pour l'utilisateur connecté et rechargées automatiquement.",
-    "preferencesError": "Impossible d'enregistrer les préférences utilisateur."
+    "preferencesError": "Impossible d'enregistrer les préférences utilisateur.",
+    "connectionTitle": "CONNEXION RASPBERRY PI",
+    "connectionDesc": "Modifier l'adresse du serveur Raspberry Pi et les ports de connexion MQTT utilisés par l'application mobile.",
+    "connectionHost": "ADRESSE IP / NOM D'HÔTE",
+    "connectionWsPort": "PORT WEBSOCKET",
+    "connectionTcpPort": "PORT MQTT",
+    "connectionSave": "ENREGISTRER LA CONNEXION",
+    "connectionSaved": "La connexion MQTT a été mise à jour.",
+    "connectionRequired": "Veuillez renseigner l'adresse du serveur et les ports.",
+    "connectionError": "Impossible de sauvegarder la connexion du Raspberry Pi."
   },
   "enrollment": {
     "title": "ENREGISTRER UN UTILISATEUR",

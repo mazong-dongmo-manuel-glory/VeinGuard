@@ -107,6 +107,11 @@ npm start
 
 L'application mobile utilise aussi les identifiants MQTT de démonstration `admin / admin1234` via [Mobile/config.js](/Users/mazong/Documents/GitHub/VeinGuard/Mobile/config.js).
 
+L'adresse du Raspberry Pi et les ports peuvent ensuite être modifiés directement dans l'application :
+
+- sur l'écran de connexion
+- dans `Paramètres`
+
 ## Configuration Firebase mobile
 
 La configuration Firebase côté mobile est centralisée dans :
