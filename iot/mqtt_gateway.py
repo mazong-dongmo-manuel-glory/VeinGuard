@@ -298,7 +298,7 @@ class BioGuardMQTTGateway:
                     preview_paths.append(capture["preview_path"])
                 time.sleep(0.35)
 
-            profile = build_enrollment_profile(frames)
+            profile = build_enrollment_profile(frames, debug_prefix=user_id)
         except Exception as exc:
             self.controller.reset_idle()
             self.client.publish(response_topic, json.dumps({"status": "error", "error": str(exc)}))
@@ -341,6 +341,7 @@ class BioGuardMQTTGateway:
                     "profile_modalities": profile["modalities"],
                     "profile": profile,
                     "preview_paths": preview_paths,
+                    "processed_image_paths": profile.get("debug_processed_images", []),
                     "telemetry": last_capture_telemetry,
                 }
             ),

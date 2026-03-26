@@ -22,6 +22,15 @@ def _encode_image_base64(image_bgr: np.ndarray, quality: int = 72) -> str:
     return base64.b64encode(encoded.tobytes()).decode("ascii")
 
 
+def _save_base64_image(image_base64: str, path: str | Path) -> str:
+    if not image_base64:
+        return ""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(base64.b64decode(image_base64))
+    return str(target)
+
+
 def _create_clahe() -> cv2.CLAHE:
     grid = max(2, int(config.NOIR_CLAHE_GRID_SIZE))
     return cv2.createCLAHE(
@@ -969,12 +978,25 @@ def _merge_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
     return fused
 
 
-def build_enrollment_profile(frames_bgr: list[np.ndarray]) -> dict[str, Any]:
+def build_enrollment_profile(
+    frames_bgr: list[np.ndarray],
+    debug_prefix: str | None = None,
+    debug_dir: str | Path = config.CAPTURE_DIR,
+) -> dict[str, Any]:
     samples = []
     rejected_samples = []
+    debug_processed_images: list[str] = []
     for index, frame in enumerate(frames_bgr, start=1):
         try:
-            samples.append(build_multimodal_profile(frame, mode="enrollment", enforce_validation=False))
+            analysis = analyze_hand_frame(frame, mode="enrollment", enforce_validation=False)
+            sample = analysis["profile"]
+            if debug_prefix:
+                debug_path = Path(debug_dir) / f"{debug_prefix}_processed_{index:02d}.jpg"
+                saved_path = _save_base64_image(analysis.get("processed_jpeg_base64", ""), debug_path)
+                if saved_path:
+                    sample["debug_processed_image_path"] = saved_path
+                    debug_processed_images.append(saved_path)
+            samples.append(sample)
         except Exception as exc:
             rejected_samples.append({"sample_index": index, "reason": str(exc)})
 
@@ -988,6 +1010,7 @@ def build_enrollment_profile(frames_bgr: list[np.ndarray]) -> dict[str, Any]:
     fused["rejected_samples"] = rejected_samples
     fused["sample_keys"] = [sample["biometric_key"] for sample in samples]
     fused["fusion_mode"] = "anatomical_roi_compcode_consensus"
+    fused["debug_processed_images"] = debug_processed_images
     fused["biometric_key"] = hashlib.sha256("|".join(fused["sample_keys"]).encode("utf-8")).hexdigest()
     return fused
 
