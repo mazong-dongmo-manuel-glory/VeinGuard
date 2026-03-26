@@ -94,7 +94,12 @@ def _mask_candidates(gray: np.ndarray) -> list[np.ndarray]:
         31,
         4,
     )
-    return [otsu_inv, otsu, adaptive_inv, adaptive]
+    _, bright = cv2.threshold(blurred, int(np.percentile(blurred, 62)), 255, cv2.THRESH_BINARY)
+    _, dark = cv2.threshold(blurred, int(np.percentile(blurred, 38)), 255, cv2.THRESH_BINARY_INV)
+    edges = cv2.Canny(blurred, 30, 90)
+    edges = cv2.dilate(edges, _elliptic_kernel(5), iterations=1)
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, _elliptic_kernel(9), iterations=2)
+    return [otsu_inv, otsu, adaptive_inv, adaptive, bright, dark, edges]
 
 
 def _postprocess_mask(mask: np.ndarray) -> np.ndarray:
@@ -112,39 +117,63 @@ def _center_distance_ratio(point: tuple[float, float], shape: tuple[int, int]) -
 
 
 def _pick_hand_contour(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    best_mask: np.ndarray | None = None
-    best_contour: np.ndarray | None = None
-    best_score = -1.0
-    frame_area = float(max(gray.shape[0] * gray.shape[1], 1))
+    def evaluate(gray_view: np.ndarray, offset_x: int = 0, offset_y: int = 0) -> tuple[np.ndarray | None, np.ndarray | None, float]:
+        best_mask: np.ndarray | None = None
+        best_contour: np.ndarray | None = None
+        best_score = -1.0
+        frame_area = float(max(gray.shape[0] * gray.shape[1], 1))
+        min_area = max(int(config.MIN_HAND_AREA * 0.40), 1200)
 
-    for candidate in _mask_candidates(gray):
-        mask = _postprocess_mask(candidate)
-        contour = _largest_contour(mask)
-        if contour is None:
-            continue
+        for candidate in _mask_candidates(gray_view):
+            mask_local = _postprocess_mask(candidate)
+            contour_local = _largest_contour(mask_local)
+            if contour_local is None:
+                continue
 
-        area = float(cv2.contourArea(contour))
-        if area < config.MIN_HAND_AREA:
-            continue
+            area = float(cv2.contourArea(contour_local))
+            if area < min_area:
+                continue
 
-        hull = cv2.convexHull(contour)
-        hull_area = float(cv2.contourArea(hull))
-        solidity = area / hull_area if hull_area else 0.0
-        moments = cv2.moments(contour)
-        center = (
-            (moments["m10"] / moments["m00"]) if moments["m00"] else gray.shape[1] / 2.0,
-            (moments["m01"] / moments["m00"]) if moments["m00"] else gray.shape[0] / 2.0,
-        )
-        area_ratio = area / frame_area
-        if area_ratio >= 0.92:
-            continue
+            full_mask = np.zeros_like(gray, dtype=np.uint8)
+            full_mask[offset_y:offset_y + mask_local.shape[0], offset_x:offset_x + mask_local.shape[1]] = mask_local
+            contour = contour_local.copy()
+            contour[:, 0, 0] += offset_x
+            contour[:, 0, 1] += offset_y
 
-        score = area * max(solidity, 0.15) * (1.15 - min(area_ratio, 0.85))
-        score *= 1.15 - min(_center_distance_ratio(center, gray.shape), 1.0)
-        if score > best_score:
-            best_score = score
-            best_mask = mask
-            best_contour = contour
+            hull = cv2.convexHull(contour)
+            hull_area = float(cv2.contourArea(hull))
+            solidity = area / hull_area if hull_area else 0.0
+            moments = cv2.moments(contour)
+            center = (
+                (moments["m10"] / moments["m00"]) if moments["m00"] else gray.shape[1] / 2.0,
+                (moments["m01"] / moments["m00"]) if moments["m00"] else gray.shape[0] / 2.0,
+            )
+            area_ratio = area / frame_area
+            if area_ratio >= 0.97:
+                continue
+
+            score = area * max(solidity, 0.12) * (1.20 - min(area_ratio, 0.92))
+            score *= 1.15 - min(_center_distance_ratio(center, gray.shape), 1.0)
+            if score > best_score:
+                best_score = score
+                best_mask = full_mask
+                best_contour = contour
+
+        return best_mask, best_contour, best_score
+
+    best_mask, best_contour, best_score = evaluate(gray)
+    if best_contour is not None:
+        return best_mask, best_contour
+
+    height, width = gray.shape[:2]
+    crop_x1 = int(width * 0.10)
+    crop_y1 = int(height * 0.05)
+    crop_x2 = int(width * 0.90)
+    crop_y2 = int(height * 0.95)
+    crop = gray[crop_y1:crop_y2, crop_x1:crop_x2]
+    crop_mask, crop_contour, crop_score = evaluate(crop, crop_x1, crop_y1)
+    if crop_contour is not None and crop_score > best_score:
+        return crop_mask, crop_contour
 
     if best_mask is None or best_contour is None:
         raise ValueError("Aucune paume exploitable detectee dans le cadre.")

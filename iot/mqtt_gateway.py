@@ -115,7 +115,7 @@ class BioGuardMQTTGateway:
             try:
                 capture = self.controller.capture_attempt(
                     claimed_user_id=user_id,
-                    persist_preview=False,
+                    persist_preview=True,
                     precompute_profile=True,
                     activate_mode=False,
                 )
@@ -140,6 +140,7 @@ class BioGuardMQTTGateway:
                         "error": str(exc),
                         "captured_frame_count": 1,
                         "processed_image_path": processed_image_path,
+                        "preview_path": last_capture["preview_path"] if 'last_capture' in locals() and last_capture else None,
                         "telemetry": last_capture["telemetry"] if 'last_capture' in locals() and last_capture else None,
                     },
                 )
@@ -200,6 +201,7 @@ class BioGuardMQTTGateway:
                         "captured_frame_count": 1,
                         "best_candidate": best_candidate_info,
                         "processed_image_path": processed_image_path,
+                        "preview_path": last_capture["preview_path"] if last_capture else None,
                     },
                 )
                 self.client.publish(
@@ -242,6 +244,7 @@ class BioGuardMQTTGateway:
                     "quality_reason": result.get("quality_reason"),
                     "telemetry": last_capture["telemetry"] if last_capture else None,
                     "processed_image_path": processed_image_path,
+                    "preview_path": last_capture["preview_path"] if last_capture else None,
                     "captured_frame_count": result.get("captured_frame_count"),
                     "valid_sample_count": result.get("valid_sample_count"),
                     "rejected_samples": result.get("rejected_samples"),
@@ -264,6 +267,7 @@ class BioGuardMQTTGateway:
                 "components": result["components"],
                 "best_candidate": best_candidate_info,
                 "processed_image_path": processed_image_path,
+                "preview_path": last_capture["preview_path"] if last_capture else None,
                 "event": event,
             }
             self.client.publish(response_topic, json.dumps(response))
