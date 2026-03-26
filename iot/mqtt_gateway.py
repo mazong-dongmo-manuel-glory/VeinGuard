@@ -12,7 +12,11 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import config
 import database
-from biometrics.biometrics_service import build_enrollment_profile, verify_multiframe
+from biometrics.biometrics_service import (
+    build_enrollment_profile,
+    build_identification_profile,
+    verify_identification_profile,
+)
 from cloud.firebase_service import FirebaseService
 from core.security_controller import SecurityController
 
@@ -140,11 +144,34 @@ class BioGuardMQTTGateway:
                 )
                 return
 
+            try:
+                live_identification_profile = build_identification_profile(scan_frames)
+            except Exception as exc:
+                self.controller.handle_access_denied("Main absente")
+                self._record_access(
+                    user_id=user_id,
+                    username=data.get("username"),
+                    status="DENIED",
+                    score=None,
+                    reason="INVALID_CAPTURE",
+                    method="multimodal_scan",
+                    modalities={
+                        "error": str(exc),
+                        "captured_frame_count": len(scan_frames),
+                        "telemetry": last_capture["telemetry"] if last_capture else None,
+                    },
+                )
+                self.client.publish(
+                    response_topic,
+                    json.dumps({"status": "fail", "reason": "INVALID_CAPTURE", "error": str(exc)}),
+                )
+                return
+
             matched_user = None
             if user_id:
                 stored_profile = database.get_biometric_profile(user_id) or self.firebase.get_biometric_profile(user_id)
                 if stored_profile:
-                    result = verify_multiframe(scan_frames, stored_profile)
+                    result = verify_identification_profile(live_identification_profile, stored_profile)
                     matched_user = {
                         "user_id": user_id,
                         "username": data.get("username") or user_id,
@@ -155,7 +182,7 @@ class BioGuardMQTTGateway:
                 candidates = database.list_biometric_profiles()
                 best_candidate = None
                 for candidate in candidates:
-                    result = verify_multiframe(scan_frames, candidate["profile"])
+                    result = verify_identification_profile(live_identification_profile, candidate["profile"])
                     if best_candidate is None or result["score"] < best_candidate["result"]["score"]:
                         best_candidate = {"candidate": candidate, "result": result}
                 if best_candidate and best_candidate["result"]["match"]:
@@ -183,7 +210,10 @@ class BioGuardMQTTGateway:
                 self.client.publish(response_topic, json.dumps({"status": "fail", "reason": "PROFILE_NOT_FOUND" if user_id else "NO_MATCH_FOUND"}))
                 return
 
-            result = matched_user.get("prefetched_result") or verify_multiframe(scan_frames, matched_user["profile"])
+            result = matched_user.get("prefetched_result") or verify_identification_profile(
+                live_identification_profile,
+                matched_user["profile"],
+            )
             if result["match"]:
                 self.controller.handle_access_granted(matched_user["username"], result["score"])
                 status = "GRANTED"

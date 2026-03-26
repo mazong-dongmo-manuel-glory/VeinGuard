@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import time
 from pathlib import Path
 
 import cv2
@@ -17,6 +18,11 @@ try:
 except ImportError:
     Picamera2 = None
 
+try:
+    from libcamera import controls as libcamera_controls
+except ImportError:
+    libcamera_controls = None
+
 
 class AccessCamera(Camera):
     def __init__(self):
@@ -25,27 +31,46 @@ class AccessCamera(Camera):
         if Picamera2 is not None and not config.MOCK_MODE:
             try:
                 self._camera = Picamera2()
-                preview = self._camera.create_preview_configuration(
-                    main={"size": (config.CAMERA_WIDTH, config.CAMERA_HEIGHT), "format": "RGB888"}
+                preview = self._camera.create_video_configuration(
+                    main={"size": (config.CAMERA_WIDTH, config.CAMERA_HEIGHT), "format": "RGB888"},
+                    controls=self._build_noir_controls(),
                 )
                 self._camera.configure(preview)
                 self._camera.start()
+                time.sleep(max(config.NOIR_CAMERA_WARMUP_SECONDS, 0.0))
                 self._apply_noir_controls()
                 self.available = True
             except Exception as exc:
                 logger.warning("Camera unavailable, fallback to mock frame: %s", exc)
                 self._camera = None
 
+    def _build_noir_controls(self) -> dict:
+        controls = {
+            "AeEnable": True,
+            "AwbEnable": False,
+            "Saturation": 0.0,
+            "Brightness": float(config.NOIR_CAMERA_BRIGHTNESS),
+            "Contrast": float(config.NOIR_CAMERA_CONTRAST),
+            "Sharpness": float(config.NOIR_CAMERA_SHARPNESS),
+            "ExposureValue": float(config.NOIR_CAMERA_EXPOSURE_VALUE),
+            "FrameDurationLimits": (
+                int(config.CAMERA_FRAME_DURATION_US),
+                int(config.CAMERA_FRAME_DURATION_US),
+            ),
+        }
+        if libcamera_controls is not None:
+            try:
+                controls["NoiseReductionMode"] = libcamera_controls.draft.NoiseReductionModeEnum.HighQuality
+            except Exception:
+                pass
+        return controls
+
     def _apply_noir_controls(self) -> None:
         if self._camera is None:
             return
         try:
-            # NoIR frames are processed as grayscale; keep colors neutral and sharpen texture details.
-            self._camera.set_controls({
-                "Saturation": 0.0,
-                "Contrast": 1.15,
-                "Sharpness": 1.3,
-            })
+            # The NoIR module is used as a near-IR texture sensor, so we favor stable exposure and local contrast.
+            self._camera.set_controls(self._build_noir_controls())
         except Exception as exc:
             logger.debug("Unable to apply NoIR controls: %s", exc)
 
@@ -86,6 +111,9 @@ class AccessCamera(Camera):
             "mock_mode": config.MOCK_MODE or not self.available,
             "width": config.CAMERA_WIDTH,
             "height": config.CAMERA_HEIGHT,
+            "frame_duration_us": config.CAMERA_FRAME_DURATION_US,
+            "contrast": config.NOIR_CAMERA_CONTRAST,
+            "sharpness": config.NOIR_CAMERA_SHARPNESS,
         }
 
     def _mock_frame(self):

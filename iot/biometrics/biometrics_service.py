@@ -46,6 +46,7 @@ def _elliptic_kernel(size: int) -> np.ndarray:
 def _preprocess_noir_gray(roi_bgr: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, (5, 5), 0)
+    gray = cv2.bilateralFilter(gray, 5, 35, 35)
     return _create_clahe().apply(gray)
 
 
@@ -617,6 +618,10 @@ def _average_components(results: list[dict[str, Any]]) -> dict[str, float | None
 
 def verify_multiframe(frames_bgr: list[np.ndarray], stored_profile: dict[str, Any]) -> dict[str, Any]:
     live_profile = build_identification_profile(frames_bgr)
+    return verify_identification_profile(live_profile, stored_profile)
+
+
+def verify_identification_profile(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> dict[str, Any]:
     sample_results = [verify_live_profile(sample, stored_profile) for sample in live_profile["samples"]]
     fused_result = verify_live_profile(live_profile, stored_profile)
 
