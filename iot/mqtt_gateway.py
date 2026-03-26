@@ -95,105 +95,108 @@ class BioGuardMQTTGateway:
         user_id = data.get("user_id")
 
         try:
-            capture = self.controller.capture_attempt(claimed_user_id=user_id)
-        except Exception as exc:
-            self.controller.handle_access_denied("Main absente")
-            self._record_access(
-                user_id=user_id,
-                username=data.get("username"),
-                status="DENIED",
-                score=None,
-                reason="INVALID_CAPTURE",
+            try:
+                capture = self.controller.capture_attempt(claimed_user_id=user_id)
+            except Exception as exc:
+                self.controller.handle_access_denied("Main absente")
+                self._record_access(
+                    user_id=user_id,
+                    username=data.get("username"),
+                    status="DENIED",
+                    score=None,
+                    reason="INVALID_CAPTURE",
+                    method="multimodal_scan",
+                    modalities={"error": str(exc)},
+                )
+                self.client.publish(
+                    response_topic,
+                    json.dumps({"status": "fail", "reason": "INVALID_CAPTURE", "error": str(exc)}),
+                )
+                return
+
+            matched_user = None
+            if user_id:
+                stored_profile = database.get_biometric_profile(user_id) or self.firebase.get_biometric_profile(user_id)
+                if stored_profile:
+                    matched_user = {
+                        "user_id": user_id,
+                        "username": data.get("username") or user_id,
+                        "profile": stored_profile,
+                    }
+            else:
+                candidates = database.list_biometric_profiles()
+                best_candidate = None
+                for candidate in candidates:
+                    result = verify_live_profile(capture["profile"], candidate["profile"])
+                    if best_candidate is None or result["score"] < best_candidate["result"]["score"]:
+                        best_candidate = {"candidate": candidate, "result": result}
+                if best_candidate and best_candidate["result"]["match"]:
+                    matched_user = {
+                        "user_id": best_candidate["candidate"]["user_id"],
+                        "username": best_candidate["candidate"]["username"],
+                        "profile": best_candidate["candidate"]["profile"],
+                        "prefetched_result": best_candidate["result"],
+                    }
+
+            if not matched_user:
+                self.controller.handle_access_denied("Profil absent")
+                self._record_access(
+                    user_id=user_id,
+                    username=data.get("username"),
+                    status="DENIED",
+                    score=None,
+                    reason="PROFILE_NOT_FOUND" if user_id else "NO_MATCH_FOUND",
+                    method="multimodal_scan",
+                    modalities={"telemetry": capture["telemetry"]},
+                )
+                self.client.publish(response_topic, json.dumps({"status": "fail", "reason": "PROFILE_NOT_FOUND" if user_id else "NO_MATCH_FOUND"}))
+                return
+
+            result = matched_user.get("prefetched_result") or verify_live_profile(capture["profile"], matched_user["profile"])
+            if result["match"]:
+                self.controller.handle_access_granted(matched_user["username"], result["score"])
+                status = "GRANTED"
+                reason = "MATCH"
+            else:
+                self.controller.handle_access_denied("Mismatch")
+                status = "DENIED"
+                reason = "BIOMETRIC_MISMATCH"
+
+            event = self._record_access(
+                user_id=matched_user["user_id"],
+                username=matched_user["username"],
+                status=status,
+                score=result["score"],
+                reason=reason,
                 method="multimodal_scan",
-                modalities={"error": str(exc)},
+                modalities={
+                    "components": result["components"],
+                    "biometric_key": result["live_profile"]["biometric_key"],
+                    "quality": result["live_profile"]["palmprint"].get("quality"),
+                    "quality_gate_passed": result.get("quality_gate_passed"),
+                    "quality_reason": result.get("quality_reason"),
+                    "telemetry": capture["telemetry"],
+                    "preview_path": capture["preview_path"],
+                },
             )
-            self.client.publish(
-                response_topic,
-                json.dumps({"status": "fail", "reason": "INVALID_CAPTURE", "error": str(exc)}),
-            )
-            return
 
-        matched_user = None
-        if user_id:
-            stored_profile = database.get_biometric_profile(user_id) or self.firebase.get_biometric_profile(user_id)
-            if stored_profile:
-                matched_user = {
-                    "user_id": user_id,
-                    "username": data.get("username") or user_id,
-                    "profile": stored_profile,
-                }
-        else:
-            candidates = database.list_biometric_profiles()
-            best_candidate = None
-            for candidate in candidates:
-                result = verify_live_profile(capture["profile"], candidate["profile"])
-                if best_candidate is None or result["score"] < best_candidate["result"]["score"]:
-                    best_candidate = {"candidate": candidate, "result": result}
-            if best_candidate and best_candidate["result"]["match"]:
-                matched_user = {
-                    "user_id": best_candidate["candidate"]["user_id"],
-                    "username": best_candidate["candidate"]["username"],
-                    "profile": best_candidate["candidate"]["profile"],
-                    "prefetched_result": best_candidate["result"],
-                }
-
-        if not matched_user:
-            self.controller.handle_access_denied("Profil absent")
-            self._record_access(
-                user_id=user_id,
-                username=data.get("username"),
-                status="DENIED",
-                score=None,
-                reason="PROFILE_NOT_FOUND" if user_id else "NO_MATCH_FOUND",
-                method="multimodal_scan",
-                modalities={"telemetry": capture["telemetry"]},
-            )
-            self.client.publish(response_topic, json.dumps({"status": "fail", "reason": "PROFILE_NOT_FOUND" if user_id else "NO_MATCH_FOUND"}))
-            return
-
-        result = matched_user.get("prefetched_result") or verify_live_profile(capture["profile"], matched_user["profile"])
-        if result["match"]:
-            self.controller.handle_access_granted(matched_user["username"], result["score"])
-            status = "GRANTED"
-            reason = "MATCH"
-        else:
-            self.controller.handle_access_denied("Mismatch")
-            status = "DENIED"
-            reason = "BIOMETRIC_MISMATCH"
-
-        event = self._record_access(
-            user_id=matched_user["user_id"],
-            username=matched_user["username"],
-            status=status,
-            score=result["score"],
-            reason=reason,
-            method="multimodal_scan",
-            modalities={
-                "components": result["components"],
+            response = {
+                "status": "success",
+                "result": status,
+                "user_id": matched_user["user_id"],
+                "username": matched_user["username"],
                 "biometric_key": result["live_profile"]["biometric_key"],
-                "quality": result["live_profile"]["palmprint"].get("quality"),
+                "score": result["score"],
+                "threshold": result["threshold"],
                 "quality_gate_passed": result.get("quality_gate_passed"),
                 "quality_reason": result.get("quality_reason"),
-                "telemetry": capture["telemetry"],
-                "preview_path": capture["preview_path"],
-            },
-        )
-
-        response = {
-            "status": "success",
-            "result": status,
-            "user_id": matched_user["user_id"],
-            "username": matched_user["username"],
-            "biometric_key": result["live_profile"]["biometric_key"],
-            "score": result["score"],
-            "threshold": result["threshold"],
-            "quality_gate_passed": result.get("quality_gate_passed"),
-            "quality_reason": result.get("quality_reason"),
-            "quality": result["live_profile"]["palmprint"].get("quality"),
-            "components": result["components"],
-            "event": event,
-        }
-        self.client.publish(response_topic, json.dumps(response))
+                "quality": result["live_profile"]["palmprint"].get("quality"),
+                "components": result["components"],
+                "event": event,
+            }
+            self.client.publish(response_topic, json.dumps(response))
+        finally:
+            self.controller.stop_preview_stream()
 
     def handle_enroll_command(self, data: dict) -> None:
         client_id = data.get("client_id", "anonymous")
@@ -204,13 +207,13 @@ class BioGuardMQTTGateway:
         department = data.get("department", "")
         password = data.get("password", "Temp1234!")
 
-        self.controller.handle_enrollment(user_id)
-
-        enrollment_frames = []
-        preview_paths = []
-        last_capture_telemetry = None
-        attempts = 0
         try:
+            self.controller.handle_enrollment(user_id)
+
+            enrollment_frames = []
+            preview_paths = []
+            last_capture_telemetry = None
+            attempts = 0
             while len(enrollment_frames) < config.ENROLLMENT_SAMPLE_COUNT and attempts < config.ENROLLMENT_MAX_ATTEMPTS:
                 attempts += 1
                 sample_index = len(enrollment_frames) + 1
@@ -250,8 +253,11 @@ class BioGuardMQTTGateway:
                 raise ValueError("Nombre d'echantillons valides insuffisant pour l'enrolement.")
             profile = build_enrollment_profile(enrollment_frames)
         except Exception as exc:
+            self.controller.reset_idle()
             self.client.publish(response_topic, json.dumps({"status": "error", "error": str(exc)}))
             return
+        finally:
+            self.controller.stop_preview_stream()
 
         database.upsert_user(
             user_id=user_id,

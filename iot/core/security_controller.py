@@ -36,18 +36,18 @@ class SecurityController:
         self.camera = AccessCamera()
         self.auto_light_enabled = True
         self.manual_light_enabled = False
-        self.preview_stream_until = 0.0
+        self.preview_stream_enabled = False
 
         self.boot_sequence()
 
-    def start_preview_stream(self, duration_seconds: float) -> None:
-        self.preview_stream_until = time.time() + max(float(duration_seconds), 0.0)
+    def start_preview_stream(self) -> None:
+        self.preview_stream_enabled = True
 
     def stop_preview_stream(self) -> None:
-        self.preview_stream_until = 0.0
+        self.preview_stream_enabled = False
 
     def preview_stream_active(self) -> bool:
-        return time.time() < self.preview_stream_until
+        return self.preview_stream_enabled
 
     def boot_sequence(self) -> None:
         self.lcd.show_message(config.APP_SHORT_NAME, "Init capteurs")
@@ -68,12 +68,12 @@ class SecurityController:
             self.lcd.show_message(config.APP_SHORT_NAME, "Mode manuel")
 
     def handle_scanning(self) -> None:
-        self.start_preview_stream(config.SCAN_PREVIEW_SECONDS)
+        self.start_preview_stream()
         self.sync_lighting(force_on=True)
         self.lcd.show_message("Analyse en cours", "Ne bouge pas")
 
     def handle_enrollment(self, user_id: str) -> None:
-        self.start_preview_stream(config.ENROLLMENT_PREVIEW_SECONDS)
+        self.start_preview_stream()
         self.sync_lighting(force_on=True)
         self.lcd.show_message("Enrolement", user_id[: config.LCD_COLS])
 
@@ -152,7 +152,11 @@ class SecurityController:
         persist_preview: bool = True,
         profile_mode: str = "scan",
     ) -> dict:
-        self.handle_scanning()
+        if profile_mode == "enrollment":
+            self.start_preview_stream()
+            self.sync_lighting(force_on=True)
+        else:
+            self.handle_scanning()
         frame = self.camera.capture_array()
         telemetry = self.sensor_snapshot()
         preview_path = None
