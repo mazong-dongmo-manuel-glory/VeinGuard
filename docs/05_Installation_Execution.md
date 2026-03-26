@@ -32,8 +32,15 @@ pip install -r requirements.txt
 export VG_MOCK_MODE=1
 export VG_MQTT_BROKER=localhost
 export VG_MQTT_PORT=1883
+export VG_MQTT_USERNAME=admin
+export VG_MQTT_PASSWORD=admin1234
 export VG_FIREBASE_ENABLED=0
 ```
+
+Le projet est configuré par défaut avec les identifiants MQTT de démonstration :
+
+- utilisateur : `admin`
+- mot de passe : `admin1234`
 
 Si Firebase est utilisé :
 
@@ -50,6 +57,39 @@ cd iot
 python mqtt_gateway.py
 ```
 
+## Commandes a executer sur le Raspberry Pi
+
+### 1. Enregistrer l'utilisateur MQTT dans Mosquitto
+
+```bash
+sudo mosquitto_passwd -b /etc/mosquitto/passwd admin admin1234
+sudo systemctl restart mosquitto
+```
+
+### 2. Tester la connexion locale au broker
+
+```bash
+mosquitto_pub -h localhost -p 1883 -u admin -P admin1234 -t test -m hello
+```
+
+### 3. Lancer le backend IoT
+
+```bash
+cd ~/Desktop/VeinGuard/iot
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+export VG_MOCK_MODE=0
+export VG_MQTT_BROKER=localhost
+export VG_MQTT_PORT=1883
+export VG_MQTT_USERNAME=admin
+export VG_MQTT_PASSWORD=admin1234
+export VG_FIREBASE_ENABLED=0
+
+python mqtt_gateway.py
+```
+
 ## Installation Mobile
 
 ```bash
@@ -61,8 +101,11 @@ npm install
 
 ```bash
 cd Mobile
+npm install
 npm start
 ```
+
+L'application mobile utilise aussi les identifiants MQTT de démonstration `admin / admin1234` via [Mobile/config.js](/Users/mazong/Documents/GitHub/VeinGuard/Mobile/config.js).
 
 ## Configuration Firebase mobile
 

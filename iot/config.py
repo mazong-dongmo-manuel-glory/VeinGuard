@@ -17,13 +17,15 @@ for path in (DATA_DIR, CAPTURE_DIR):
 APP_NAME = os.getenv("VG_APP_NAME", "BioGuard Access")
 APP_SHORT_NAME = os.getenv("VG_APP_SHORT_NAME", "BioGuard")
 DEVICE_ID = os.getenv("VG_DEVICE_ID", "rpi-entry-01")
-MOCK_MODE = os.getenv("VG_MOCK_MODE", "1").lower() in {"1", "true", "yes", "on"}
+MOCK_MODE = os.getenv("VG_MOCK_MODE", "0").lower() in {"1", "true", "yes", "on"}
 
 # MQTT
 MQTT_BROKER = os.getenv("VG_MQTT_BROKER", "localhost")
 MQTT_PORT = int(os.getenv("VG_MQTT_PORT", "1883"))
 MQTT_KEEPALIVE = int(os.getenv("VG_MQTT_KEEPALIVE", "60"))
 MQTT_TOPIC_PREFIX = os.getenv("VG_TOPIC_PREFIX", "bioguard")
+MQTT_USERNAME = os.getenv("VG_MQTT_USERNAME", "admin").strip()
+MQTT_PASSWORD = os.getenv("VG_MQTT_PASSWORD", "admin1234")
 
 
 def topic(path: str) -> str:

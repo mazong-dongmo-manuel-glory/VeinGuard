@@ -28,6 +28,10 @@ class BioGuardMQTTGateway:
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
 
+        if config.MQTT_USERNAME:
+            self.client.username_pw_set(config.MQTT_USERNAME, config.MQTT_PASSWORD)
+            logger.info("Using MQTT credentials for user %s", config.MQTT_USERNAME)
+
         logger.info("Connecting to MQTT broker at %s:%s", config.MQTT_BROKER, config.MQTT_PORT)
         self.client.connect(config.MQTT_BROKER, config.MQTT_PORT, config.MQTT_KEEPALIVE)
 
@@ -38,6 +42,8 @@ class BioGuardMQTTGateway:
             self.publish_status("ONLINE")
         else:
             logger.error("MQTT connection failed with code %s", rc)
+            if rc == 5:
+                logger.error("MQTT broker refused the connection: verify username, password and broker ACL.")
 
     def on_message(self, client, userdata, msg):
         topic = msg.topic

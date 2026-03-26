@@ -95,6 +95,11 @@ npm start
 
 Configurer ensuite les variables `EXPO_PUBLIC_FIREBASE_*` côté mobile et les variables `VG_FIREBASE_*` côté Raspberry Pi.
 
+Pour la démonstration actuelle, les identifiants MQTT enregistrés dans le projet sont :
+
+- utilisateur : `admin`
+- mot de passe : `admin1234`
+
 ## Documents
 
 - Documentation projet : [docs/Documentation_Projet_BioGuard.md](/Users/mazong/Documents/GitHub/VeinGuard/docs/Documentation_Projet_BioGuard.md)

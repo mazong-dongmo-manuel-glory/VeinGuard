@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import mqtt from 'mqtt';
-import { MQTT_BROKER_URL, MQTT_TOPICS, responseTopic } from '../config';
+import { MQTT_BROKER_URL, MQTT_PASSWORD, MQTT_TOPICS, MQTT_USERNAME, responseTopic } from '../config';
 
 export const useMqttStore = create((set, get) => ({
   client: null,
@@ -17,6 +17,8 @@ export const useMqttStore = create((set, get) => ({
       clientId: get().clientId,
       clean: true,
       reconnectPeriod: 5000,
+      username: MQTT_USERNAME,
+      password: MQTT_PASSWORD,
     });
 
     client.on('connect', () => {

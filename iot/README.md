@@ -95,5 +95,29 @@ python mqtt_gateway.py
 ```bash
 export VG_MOCK_MODE=1
 export VG_MQTT_BROKER=localhost
+export VG_MQTT_USERNAME=admin
+export VG_MQTT_PASSWORD=admin1234
 export VG_FIREBASE_ENABLED=0
+```
+
+Identifiants MQTT de démonstration enregistrés dans le projet :
+
+- utilisateur : `admin`
+- mot de passe : `admin1234`
+
+Commandes Raspberry Pi recommandées :
+
+```bash
+sudo mosquitto_passwd -b /etc/mosquitto/passwd admin admin1234
+sudo systemctl restart mosquitto
+
+mosquitto_pub -h localhost -p 1883 -u admin -P admin1234 -t test -m hello
+
+cd ~/Desktop/VeinGuard/iot
+source .venv/bin/activate
+export VG_MQTT_BROKER=localhost
+export VG_MQTT_PORT=1883
+export VG_MQTT_USERNAME=admin
+export VG_MQTT_PASSWORD=admin1234
+python mqtt_gateway.py
 ```
