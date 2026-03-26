@@ -171,7 +171,7 @@ class BioGuardMQTTGateway:
                 best_candidate = None
                 for candidate in candidates:
                     result = verify_identification_profile(live_identification_profile, candidate["profile"])
-                    if best_candidate is None or result["score"] < best_candidate["result"]["score"]:
+                    if best_candidate is None or result["score"] > best_candidate["result"]["score"]:
                         best_candidate = {"candidate": candidate, "result": result}
                 if best_candidate:
                     best_candidate_info = {

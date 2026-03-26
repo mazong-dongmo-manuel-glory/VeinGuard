@@ -1066,6 +1066,57 @@ def _mean_numeric(values: list[float | int]) -> float:
     return float(np.mean(np.array(values, dtype=np.float32)))
 
 
+def _feature_vector_from_profile(profile: dict[str, Any]) -> dict[str, list[float]]:
+    hand_pattern = profile.get("hand_pattern", {})
+    geometry = profile.get("palmprint", {}).get("geometry", {})
+    return {
+        "contour": [float(value) for value in hand_pattern.get("contour_signature", [])[:64]],
+        "width_profile": [float(value) for value in hand_pattern.get("width_profile", [])[:24]],
+        "finger_lengths": [float(value) for value in hand_pattern.get("finger_lengths", [])[:5]],
+        "finger_widths": [float(value) for value in hand_pattern.get("finger_widths", [])[:5]],
+        "global": [
+            float(hand_pattern.get("palm_width_ratio", 0.0)),
+            float(hand_pattern.get("palm_base_y_ratio", 0.0)),
+            float(geometry.get("aspect_ratio", 0.0)),
+            float(geometry.get("solidity", 0.0)),
+            float(geometry.get("extent", 0.0)),
+            float(geometry.get("valley_span_ratio", 0.0)),
+        ],
+    }
+
+
+def _probabilistic_model_from_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    component_names = ("contour", "width_profile", "finger_lengths", "finger_widths", "global")
+    model = {"component_order": list(component_names), "sample_count": len(samples)}
+    feature_vectors = [_feature_vector_from_profile(sample) for sample in samples]
+
+    for name in component_names:
+        matrix = np.array([vector[name] for vector in feature_vectors], dtype=np.float32)
+        if matrix.ndim == 1:
+            matrix = matrix.reshape(1, -1)
+        mean = matrix.mean(axis=0)
+        std = matrix.std(axis=0)
+        std = np.maximum(std, 0.035 if name != "global" else 0.02)
+        model[name] = {
+            "mean": [round(float(value), 6) for value in mean.tolist()],
+            "std": [round(float(value), 6) for value in std.tolist()],
+        }
+    return model
+
+
+def _probabilistic_similarity(live_values: list[float], mean_values: list[float], std_values: list[float]) -> float:
+    live = np.array(live_values, dtype=np.float32)
+    mean = np.array(mean_values, dtype=np.float32)
+    std = np.maximum(np.array(std_values, dtype=np.float32), 1e-6)
+    size = min(live.size, mean.size, std.size)
+    if size == 0:
+        return 0.0
+    normalized = np.abs(live[:size] - mean[:size]) / std[:size]
+    clipped = np.minimum(normalized, 3.0)
+    distance = float(np.mean(clipped) / 3.0)
+    return max(0.0, 1.0 - distance)
+
+
 def _merge_orientation_templates(samples: list[dict[str, Any]]) -> tuple[list[list[int]], list[list[int]], list[float]]:
     codes = np.stack(
         [np.array(sample["palmprint"]["orientation_code"], dtype=np.uint8) for sample in samples],
@@ -1222,6 +1273,7 @@ def build_enrollment_profile(
     fused["sample_keys"] = [sample["biometric_key"] for sample in samples]
     fused["fusion_mode"] = "anatomical_roi_compcode_consensus"
     fused["debug_processed_images"] = debug_processed_images
+    fused["probabilistic_model"] = _probabilistic_model_from_samples(samples)
     fused["biometric_key"] = hashlib.sha256("|".join(fused["sample_keys"]).encode("utf-8")).hexdigest()
     return fused
 
@@ -1245,6 +1297,7 @@ def build_identification_profile(frames_bgr: list[np.ndarray]) -> dict[str, Any]
     fused["rejected_samples"] = rejected_samples
     fused["fusion_mode"] = "scan_best_orientation_template"
     fused["sample_keys"] = [sample["biometric_key"] for sample in samples]
+    fused["feature_vector"] = _feature_vector_from_profile(fused)
     fused["biometric_key"] = hashlib.sha256("|".join(fused["sample_keys"]).encode("utf-8")).hexdigest()
     return fused
 
@@ -1283,162 +1336,116 @@ def _orientation_code_score(live_profile: dict[str, Any], stored_profile: dict[s
 
 
 def _compare_legacy_profiles(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> dict[str, Any]:
-    live_geometry = live_profile["palmprint"]["geometry"]
-    ref_geometry = stored_profile["palmprint"]["geometry"]
-    live_pattern = live_profile.get("hand_pattern", {})
-    ref_pattern = stored_profile.get("hand_pattern", {})
-    geometry_score = float(
-        np.mean(
-            np.array(
-                [
-                    _relative_score(live_geometry["aspect_ratio"], ref_geometry.get("aspect_ratio", 0.0)),
-                    _relative_score(live_geometry["solidity"], ref_geometry.get("solidity", 0.0)),
-                    _relative_score(live_geometry["extent"], ref_geometry.get("extent", 0.0)),
-                    _relative_score(live_geometry["valley_span_ratio"], ref_geometry.get("valley_span_ratio", 0.0)),
-                ],
-                dtype=np.float32,
-            )
-        )
-    )
-    finger_length_score = _vector_score(live_pattern.get("finger_lengths", []), ref_pattern.get("finger_lengths", []))
-    finger_width_score = _vector_score(live_pattern.get("finger_widths", []), ref_pattern.get("finger_widths", []))
-    width_profile_score = _vector_score(live_pattern.get("width_profile", []), ref_pattern.get("width_profile", []))
-    contour_score = _vector_score(live_pattern.get("contour_signature", []), ref_pattern.get("contour_signature", []))
-    palm_width_score = _relative_score(
-        float(live_pattern.get("palm_width_ratio", 0.0)),
-        float(ref_pattern.get("palm_width_ratio", 0.0)),
-    )
+    live_features = _feature_vector_from_profile(live_profile)
+    ref_features = _feature_vector_from_profile(stored_profile)
+    contour_similarity = 1.0 - _vector_score(live_features["contour"], ref_features["contour"])
+    width_profile_similarity = 1.0 - _vector_score(live_features["width_profile"], ref_features["width_profile"])
+    finger_length_similarity = 1.0 - _vector_score(live_features["finger_lengths"], ref_features["finger_lengths"])
+    finger_width_similarity = 1.0 - _vector_score(live_features["finger_widths"], ref_features["finger_widths"])
+    global_similarity = 1.0 - _vector_score(live_features["global"], ref_features["global"])
+    contour_similarity = float(np.clip(contour_similarity, 0.0, 1.0))
+    width_profile_similarity = float(np.clip(width_profile_similarity, 0.0, 1.0))
+    finger_length_similarity = float(np.clip(finger_length_similarity, 0.0, 1.0))
+    finger_width_similarity = float(np.clip(finger_width_similarity, 0.0, 1.0))
+    global_similarity = float(np.clip(global_similarity, 0.0, 1.0))
 
-    live_hist = np.array(live_profile["palmprint"].get("intensity_histogram", []), dtype=np.float32)
-    ref_hist = np.array(stored_profile["palmprint"].get("intensity_histogram", []), dtype=np.float32)
-    histogram_score = float(np.mean(np.abs(live_hist - ref_hist))) if live_hist.size and ref_hist.size else 1.0
-
-    live_hu = np.array(live_geometry.get("hu", []), dtype=np.float32)
-    ref_hu = np.array(ref_geometry.get("hu", []), dtype=np.float32)
-    if live_hu.size and ref_hu.size:
-        hu_denominator = np.maximum(np.maximum(np.abs(live_hu), np.abs(ref_hu)), 1.0)
-        hu_score = float(np.mean(np.abs(live_hu - ref_hu) / hu_denominator))
-    else:
-        hu_score = 1.0
-
-    texture_score = _relative_score(_profile_texture_density(live_profile), _profile_texture_density(stored_profile))
-    palm_score = float(
-        0.18 * contour_score
-        + 0.18 * width_profile_score
-        + 0.18 * finger_length_score
-        + 0.14 * finger_width_score
-        + 0.10 * palm_width_score
-        + 0.10 * histogram_score
-        + 0.07 * geometry_score
-        + 0.03 * texture_score
-        + 0.02 * hu_score
+    similarity = float(
+        0.32 * contour_similarity
+        + 0.22 * width_profile_similarity
+        + 0.20 * finger_length_similarity
+        + 0.16 * finger_width_similarity
+        + 0.10 * global_similarity
     )
     live_quality = live_profile["palmprint"].get("quality", {})
     live_validation = live_quality.get("validation", {})
     quality_gate_passed = live_validation.get("valid", True) and live_quality.get("score", 0.0) >= config.MIN_CAPTURE_QUALITY
 
     return {
-        "match": bool(quality_gate_passed and palm_score <= config.MATCH_THRESHOLD),
-        "score": round(palm_score, 4),
+        "match": bool(quality_gate_passed and similarity >= config.MATCH_THRESHOLD),
+        "score": round(similarity, 4),
         "threshold": config.MATCH_THRESHOLD,
         "quality_gate_passed": quality_gate_passed,
         "quality_reason": live_validation.get("reason"),
         "components": {
-            "orb": round(contour_score, 4),
+            "orb": round(contour_similarity, 4),
             "orientation": None,
-            "geometry": round(geometry_score, 4),
-            "finger_lengths": round(finger_length_score, 4),
-            "finger_widths": round(finger_width_score, 4),
-            "palm_width": round(palm_width_score, 4),
-            "width_profile": round(width_profile_score, 4),
-            "contour": round(contour_score, 4),
-            "histogram": round(histogram_score, 4),
-            "texture_density": round(texture_score, 4),
-            "alignment": round(hu_score, 4),
-            "hu": round(width_profile_score, 4),
+            "geometry": round(global_similarity, 4),
+            "finger_lengths": round(finger_length_similarity, 4),
+            "finger_widths": round(finger_width_similarity, 4),
+            "palm_width": round(global_similarity, 4),
+            "width_profile": round(width_profile_similarity, 4),
+            "contour": round(contour_similarity, 4),
+            "histogram": None,
+            "texture_density": None,
+            "alignment": None,
+            "hu": round(width_profile_similarity, 4),
         },
     }
 
 
 def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> dict[str, Any]:
-    if not stored_profile.get("palmprint", {}).get("orientation_code"):
+    if not stored_profile.get("probabilistic_model"):
         return _compare_legacy_profiles(live_profile, stored_profile)
-
-    live_geometry = live_profile["palmprint"]["geometry"]
-    ref_geometry = stored_profile["palmprint"]["geometry"]
-    live_pattern = live_profile.get("hand_pattern", {})
-    ref_pattern = stored_profile.get("hand_pattern", {})
-    orientation_score = _orientation_code_score(live_profile, stored_profile)
-    contour_score = _vector_score(live_pattern.get("contour_signature", []), ref_pattern.get("contour_signature", []))
-    width_profile_score = _vector_score(live_pattern.get("width_profile", []), ref_pattern.get("width_profile", []))
-    finger_length_score = _vector_score(live_pattern.get("finger_lengths", []), ref_pattern.get("finger_lengths", []))
-    finger_width_score = _vector_score(live_pattern.get("finger_widths", []), ref_pattern.get("finger_widths", []))
-    palm_width_score = _relative_score(
-        float(live_pattern.get("palm_width_ratio", 0.0)),
-        float(ref_pattern.get("palm_width_ratio", 0.0)),
+    model = stored_profile["probabilistic_model"]
+    live_features = live_profile.get("feature_vector") or _feature_vector_from_profile(live_profile)
+    contour_similarity = _probabilistic_similarity(
+        live_features["contour"],
+        model["contour"]["mean"],
+        model["contour"]["std"],
+    )
+    width_profile_similarity = _probabilistic_similarity(
+        live_features["width_profile"],
+        model["width_profile"]["mean"],
+        model["width_profile"]["std"],
+    )
+    finger_length_similarity = _probabilistic_similarity(
+        live_features["finger_lengths"],
+        model["finger_lengths"]["mean"],
+        model["finger_lengths"]["std"],
+    )
+    finger_width_similarity = _probabilistic_similarity(
+        live_features["finger_widths"],
+        model["finger_widths"]["mean"],
+        model["finger_widths"]["std"],
+    )
+    global_similarity = _probabilistic_similarity(
+        live_features["global"],
+        model["global"]["mean"],
+        model["global"]["std"],
     )
 
-    live_hist = np.array(live_profile["palmprint"]["orientation_histogram"], dtype=np.float32)
-    ref_hist = np.array(stored_profile["palmprint"]["orientation_histogram"], dtype=np.float32)
-    histogram_score = float(np.mean(np.abs(live_hist - ref_hist)))
-
-    geometry_score = float(
-        np.mean(
-            np.array(
-                [
-                    _relative_score(live_geometry["aspect_ratio"], ref_geometry.get("aspect_ratio", 0.0)),
-                    _relative_score(live_geometry["solidity"], ref_geometry.get("solidity", 0.0)),
-                    _relative_score(live_geometry["extent"], ref_geometry.get("extent", 0.0)),
-                    _relative_score(live_geometry["valley_span_ratio"], ref_geometry.get("valley_span_ratio", 0.0)),
-                    _relative_score(live_geometry["finger_peaks"], ref_geometry.get("finger_peaks", 0.0)),
-                ],
-                dtype=np.float32,
-            )
-        )
-    )
-    texture_score = _relative_score(_profile_texture_density(live_profile), _profile_texture_density(stored_profile))
-    alignment_score = _relative_score(
-        live_profile["palmprint"].get("alignment", {}).get("rotation_degrees", 0.0),
-        stored_profile["palmprint"].get("alignment", {}).get("rotation_degrees", 0.0),
-    )
-
-    palm_score = float(
-        0.28 * contour_score
-        + 0.20 * width_profile_score
-        + 0.18 * finger_length_score
-        + 0.14 * finger_width_score
-        + 0.08 * palm_width_score
-        + 0.05 * histogram_score
-        + 0.03 * texture_score
-        + 0.02 * geometry_score
-        + 0.01 * alignment_score
-        + 0.01 * orientation_score
+    similarity = float(
+        0.32 * contour_similarity
+        + 0.22 * width_profile_similarity
+        + 0.20 * finger_length_similarity
+        + 0.16 * finger_width_similarity
+        + 0.10 * global_similarity
     )
 
     live_quality = live_profile["palmprint"].get("quality", {})
     live_validation = live_quality.get("validation", {})
     quality_gate_passed = live_validation.get("valid", True) and live_quality.get("score", 0.0) >= config.MIN_CAPTURE_QUALITY
-    score_gate_passed = palm_score <= config.MATCH_THRESHOLD
+    score_gate_passed = similarity >= config.MATCH_THRESHOLD
 
     return {
         "match": bool(quality_gate_passed and score_gate_passed),
-        "score": round(palm_score, 4),
+        "score": round(similarity, 4),
         "threshold": config.MATCH_THRESHOLD,
         "quality_gate_passed": quality_gate_passed,
         "quality_reason": live_validation.get("reason"),
         "components": {
-            "orientation": round(orientation_score, 4),
-            "geometry": round(geometry_score, 4),
-            "finger_lengths": round(finger_length_score, 4),
-            "finger_widths": round(finger_width_score, 4),
-            "palm_width": round(palm_width_score, 4),
-            "width_profile": round(width_profile_score, 4),
-            "contour": round(contour_score, 4),
-            "orb": round(contour_score, 4),
-            "histogram": round(histogram_score, 4),
-            "texture_density": round(texture_score, 4),
-            "alignment": round(alignment_score, 4),
-            "hu": round(width_profile_score, 4),
+            "orientation": None,
+            "geometry": round(global_similarity, 4),
+            "finger_lengths": round(finger_length_similarity, 4),
+            "finger_widths": round(finger_width_similarity, 4),
+            "palm_width": round(global_similarity, 4),
+            "width_profile": round(width_profile_similarity, 4),
+            "contour": round(contour_similarity, 4),
+            "orb": round(contour_similarity, 4),
+            "histogram": None,
+            "texture_density": None,
+            "alignment": None,
+            "hu": round(width_profile_similarity, 4),
         },
     }
 
@@ -1452,7 +1459,7 @@ def verify_live_profile(live_profile: dict[str, Any], stored_profile: dict[str, 
         comparison = _compare_profiles(live_profile, candidate)
         scored_candidates.append((comparison["score"], index, comparison))
 
-    best_score, best_index, best_result = min(scored_candidates, key=lambda item: item[0])
+    best_score, best_index, best_result = max(scored_candidates, key=lambda item: item[0])
     return {
         **best_result,
         "score": round(float(best_score), 4),
@@ -1497,13 +1504,13 @@ def verify_identification_profile(live_profile: dict[str, Any], stored_profile: 
     sample_results = [verify_live_profile(sample, stored_profile) for sample in live_samples]
     fused_result = verify_live_profile(live_profile, stored_profile)
 
-    ranked_results = sorted([fused_result, *sample_results], key=lambda item: item["score"])
+    ranked_results = sorted([fused_result, *sample_results], key=lambda item: item["score"], reverse=True)
     best_result = ranked_results[0]
     top_results = ranked_results[: min(2, len(ranked_results))]
     top_mean = float(np.mean(np.array([result["score"] for result in top_results], dtype=np.float32)))
     combined_score = round(float(0.25 * fused_result["score"] + 0.55 * best_result["score"] + 0.20 * top_mean), 4)
     quality_gate_passed = any(result.get("quality_gate_passed") for result in ranked_results)
-    score_gate_passed = combined_score <= config.MATCH_THRESHOLD
+    score_gate_passed = combined_score >= config.MATCH_THRESHOLD
 
     return {
         "match": bool(quality_gate_passed and score_gate_passed),
