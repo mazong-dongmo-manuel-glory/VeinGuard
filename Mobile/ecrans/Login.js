@@ -47,22 +47,22 @@ export default function Login({ navigation }) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert("Erreur", "Veuillez entrer une adresse e-mail et un mot de passe.");
+      Alert.alert(t('common.error'), t('login.missingCredentials'));
       return;
     }
 
     if (!String(email).includes('@')) {
-      Alert.alert("Erreur", "Veuillez entrer une adresse e-mail valide.");
+      Alert.alert(t('common.error'), t('login.invalidEmail'));
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert("Erreur", "Le mot de passe doit contenir au moins 6 caractères.");
+      Alert.alert(t('common.error'), t('login.passwordTooShort'));
       return;
     }
 
     if (isSignupMode && password !== confirmPassword) {
-      Alert.alert("Erreur", "Les mots de passe ne correspondent pas.");
+      Alert.alert(t('common.error'), t('login.passwordMismatch'));
       return;
     }
 
@@ -73,7 +73,10 @@ export default function Login({ navigation }) {
         await login({ email, password, rememberSession });
       }
     } catch (error) {
-      Alert.alert(isSignupMode ? "Échec de création du compte" : "Échec de connexion", getFirebaseAuthErrorMessage(error));
+      Alert.alert(
+        isSignupMode ? t('login.signupFailed') : t('login.loginFailed'),
+        getFirebaseAuthErrorMessage(error),
+      );
       console.error(error);
     }
   };

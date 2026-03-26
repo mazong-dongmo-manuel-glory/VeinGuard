@@ -15,10 +15,21 @@
     "success": "Succès",
     "warning": "Avertissement",
     "info": "Information",
+    "logoutConfirm": "Voulez-vous vraiment vous déconnecter ?",
+    "retry": "Réessayer",
+    "unknownUser": "UTILISATEUR INCONNU",
     "connected": "CONNECTÉ",
     "disconnected": "DÉCONNECTÉ",
     "online": "EN LIGNE",
-    "offline": "HORS LIGNE"
+    "offline": "HORS LIGNE",
+    "appRecoveredTitle": "Incident technique",
+    "appRecoveredDesc": "Une erreur inattendue a été interceptée. L’application reste utilisable."
+  },
+  "navigation": {
+    "home": "ACCUEIL",
+    "history": "HISTORIQUE",
+    "users": "UTILISATEURS",
+    "settings": "PARAMÈTRES"
   },
   "login": {
     "title": "BIOGUARD ACCESS",
@@ -54,7 +65,25 @@
     "serverConfigSave": "ENREGISTRER ET RECONNECTER",
     "serverConfigSaved": "La configuration du serveur a été enregistrée.",
     "serverConfigRequired": "Veuillez saisir l'adresse du serveur et les deux ports.",
-    "serverConfigError": "Impossible de mettre à jour la connexion MQTT."
+    "serverConfigError": "Impossible de mettre à jour la connexion MQTT.",
+    "missingCredentials": "Veuillez entrer une adresse e-mail et un mot de passe.",
+    "invalidEmail": "Veuillez entrer une adresse e-mail valide.",
+    "passwordTooShort": "Le mot de passe doit contenir au moins 6 caractères.",
+    "passwordMismatch": "Les mots de passe ne correspondent pas.",
+    "signupFailed": "Échec de création du compte",
+    "loginFailed": "Échec de connexion",
+    "firebaseUnavailable": "Firebase Authentication n'est pas disponible.",
+    "authInvalidEmail": "L'adresse e-mail n'est pas valide.",
+    "authInvalidCredential": "L'adresse e-mail ou le mot de passe est incorrect.",
+    "authUserNotFound": "Aucun compte n'existe avec cette adresse e-mail.",
+    "authWrongPassword": "Le mot de passe est incorrect.",
+    "authTooManyRequests": "Trop de tentatives. Réessayez plus tard.",
+    "authNetworkFailed": "La connexion réseau a échoué.",
+    "authOperationNotAllowed": "La connexion par e-mail et mot de passe n'est pas activée dans Firebase.",
+    "authEmailInUse": "Cette adresse e-mail est déjà utilisée.",
+    "authWeakPassword": "Le mot de passe est trop faible.",
+    "authMissingEmail": "Veuillez saisir une adresse e-mail.",
+    "authDefaultError": "Échec de connexion."
   },
   "dashboard": {
     "title": "STATUT DU SYSTÈME RASPBERRY PI",
@@ -435,7 +464,10 @@
     "enrolledAt": "Enrôlé le",
     "idLabel": "ID",
     "activeStatus": "ACTIF",
-    "dropdownLabel": "Gestion des utilisateurs (Rôles/Liste)"
+    "dropdownLabel": "Gestion des utilisateurs (Rôles/Liste)",
+    "deleteConfirmTitle": "Supprimer utilisateur",
+    "deleteConfirmDesc": "Supprimer {{username}} ?",
+    "deleteErrorDesc": "Suppression impossible."
   },
   "veinScan": {
     "title": "SCAN MULTIMODAL",

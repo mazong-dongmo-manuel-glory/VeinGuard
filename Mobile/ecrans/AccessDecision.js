@@ -27,7 +27,35 @@ const Header = ({ navigation, t }) => (
   </View>
 );
 
-const UserHologram = ({ t }) => (
+const formatEventScore = (value) => {
+  const numericValue =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number.parseFloat(value.replace('%', ''))
+        : Number.NaN;
+
+  if (!Number.isFinite(numericValue)) {
+    return 98.7;
+  }
+
+  return numericValue <= 1 ? numericValue * 100 : numericValue;
+};
+
+const formatEventTime = (timestamp) => {
+  if (!timestamp) {
+    return '--:--:--';
+  }
+
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return String(timestamp);
+  }
+
+  return date.toLocaleTimeString();
+};
+
+const UserHologram = ({ t, userName, userMeta, userId, department }) => (
   <View style={styles.hologramContainer}>
     <LinearGradient colors={['rgba(57, 255, 20, 0.15)', 'transparent']} style={styles.hologramBeam} />
     <BlurView intensity={20} tint="dark" style={styles.userCard}>
@@ -38,18 +66,18 @@ const UserHologram = ({ t }) => (
         </View>
       </View>
       <View style={styles.userInfo}>
-        <Text numberOfLines={1} style={styles.userName}>{t('accessDecision.userNameValue')}</Text>
-        <Text numberOfLines={2} style={styles.userRole}>{t('accessDecision.userRoleValue')}</Text>
+        <Text numberOfLines={1} style={styles.userName}>{userName}</Text>
+        <Text numberOfLines={2} style={styles.userRole}>{userMeta}</Text>
       </View>
       <View style={styles.cardDivider} />
       <View style={styles.cardGrid}>
         <View style={styles.cardCell}>
           <Text style={styles.cardLabel}>{t('userManagement.idLabel')}</Text>
-          <Text style={styles.cardValue}>USR-2847</Text>
+          <Text style={styles.cardValue}>{userId}</Text>
         </View>
         <View style={styles.cardCell}>
           <Text style={styles.cardLabel}>{t('accessDecision.departmentShort')}</Text>
-          <Text style={styles.cardValue}>{t('accessDecision.departmentValue')}</Text>
+          <Text style={styles.cardValue}>{department}</Text>
         </View>
       </View>
     </BlurView>
@@ -73,10 +101,20 @@ const ConfidenceMeter = ({ value, t }) => (
   </BlurView>
 );
 
-export default function AccessDecision({ navigation }) {
+export default function AccessDecision({ navigation, route }) {
   const { t } = useTranslation();
   const [audioOn, setAudioOn] = useState(true);
   const isCompact = width < 390;
+  const event = route?.params?.event || {};
+  const userName = event?.username || t('common.unknownUser');
+  const userMeta = String(event?.method || event?.reason || t('accessDecision.userRoleValue')).toUpperCase();
+  const userId = event?.user_id || '--';
+  const department = event?.department || '--';
+  const deviceId = event?.device_id || 'BG-RPI-01';
+  const eventTime = formatEventTime(event?.timestamp);
+  const eventScore = formatEventScore(event?.score);
+  const isGranted = String(event?.status || 'GRANTED').toUpperCase() === 'GRANTED';
+  const statusTitle = isGranted ? t('accessDecision.statusGranted') : t('accessHistory.denied');
 
   return (
     <View style={styles.screen}>
@@ -90,25 +128,31 @@ export default function AccessDecision({ navigation }) {
           <View style={styles.checkWrap}>
             <LinearGradient colors={[COLORS.neonGreen, 'transparent']} style={styles.checkGlow} />
             <View style={styles.checkInner}>
-              <Ionicons name="checkmark" size={60} color={COLORS.neonGreen} />
+              <Ionicons name={isGranted ? "checkmark" : "close"} size={60} color={isGranted ? COLORS.neonGreen : COLORS.neonRed} />
             </View>
           </View>
-          <Text style={styles.statusTitle}>{t('accessDecision.statusGranted')}</Text>
+          <Text style={[styles.statusTitle, !isGranted && styles.statusTitleDenied]}>{statusTitle}</Text>
           <Text style={styles.statusSub}>{t('accessDecision.doorUnlockedFor5s')}</Text>
         </View>
 
-        <UserHologram t={t} />
+        <UserHologram
+          t={t}
+          userName={userName}
+          userMeta={userMeta}
+          userId={userId}
+          department={department}
+        />
         
-        <ConfidenceMeter value={98.7} t={t} />
+        <ConfidenceMeter value={eventScore} t={t} />
 
         <View style={[styles.detailsGrid, isCompact && styles.detailsGridCompact]}>
           <BlurView intensity={10} style={styles.detailCard}>
             <Text style={styles.detailLabel}>{t('accessDecision.deviceLabel')}</Text>
-            <Text style={styles.detailValue}>BG-RPI-01</Text>
+            <Text style={styles.detailValue}>{deviceId}</Text>
           </BlurView>
           <BlurView intensity={10} style={styles.detailCard}>
             <Text style={styles.detailLabel}>{t('accessDecision.timeLabel')}</Text>
-            <Text style={styles.detailValue}>14:23:45</Text>
+            <Text style={styles.detailValue}>{eventTime}</Text>
           </BlurView>
         </View>
 
@@ -171,6 +215,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   statusSub: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '800', letterSpacing: 1, textAlign: 'center', lineHeight: 18 },
+  statusTitleDenied: {
+    color: COLORS.neonRed,
+    textShadowColor: COLORS.neonRed,
+  },
 
   hologramContainer: { marginBottom: 30, alignItems: 'center' },
   hologramBeam: { position: 'absolute', top: -40, width: 2, height: 200, opacity: 0.5 },

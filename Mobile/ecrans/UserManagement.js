@@ -39,6 +39,18 @@ function UserCard({ user, onEdit, onDelete, compact, showTechnicalDetails }) {
   const { t } = useTranslation();
   const roleColor = user.role === 'admin' ? '#2060ff' : COLORS.neonCyan;
   const statusColor = COLORS.neonGreen;
+  const emailOrRole = user.email || String(user.role || '').toUpperCase();
+  const createdAtLabel = user.created_at
+    ? new Date(user.created_at).toLocaleDateString()
+    : '--';
+  const roleLabel =
+    user.role === 'admin'
+      ? t('enrollment.adminRole')
+      : user.role === 'operator'
+        ? t('enrollment.operatorRole')
+        : user.role === 'guest'
+          ? t('enrollment.guestRole')
+          : String(user.role || '').toUpperCase();
 
   return (
     <BlurView intensity={15} tint="dark" style={[styles.userCard, compact && styles.userCardCompact]}>
@@ -51,10 +63,10 @@ function UserCard({ user, onEdit, onDelete, compact, showTechnicalDetails }) {
         <View style={styles.userInfo}>
           <Text numberOfLines={1} style={styles.userName}>{user.username}</Text>
           {showTechnicalDetails ? (
-            <Text numberOfLines={1} style={styles.userEmail}>{user.email || user.role.toUpperCase()}</Text>
+            <Text numberOfLines={1} style={styles.userEmail}>{emailOrRole}</Text>
           ) : null}
           <View style={styles.badgeRow}>
-            <RoleBadge role={String(user.role || '').toUpperCase()} color={roleColor} />
+            <RoleBadge role={String(roleLabel || '').toUpperCase()} color={roleColor} />
             <StatusBadge status={t('userManagement.activeStatus')} color={statusColor} />
           </View>
         </View>
@@ -64,7 +76,7 @@ function UserCard({ user, onEdit, onDelete, compact, showTechnicalDetails }) {
         <View style={styles.userDetails}>
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>{t('userManagement.enrolledAt').toUpperCase()}</Text>
-            <Text style={styles.detailValue}>{new Date(user.created_at).toLocaleDateString()}</Text>
+            <Text style={styles.detailValue}>{createdAtLabel}</Text>
           </View>
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>{t('userManagement.idLabel')}</Text>
@@ -92,6 +104,7 @@ export default function UserManagement({ navigation }) {
   const [search, setSearch] = useState('');
   const [usersList, setUsersList] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   const fetchUsers = useMqttStore((state) => state.fetchUsers);
   const deleteUser = useMqttStore((state) => state.deleteUser);
@@ -104,20 +117,23 @@ export default function UserManagement({ navigation }) {
   const loadUsers = useCallback(async () => {
     if (!isConnected) {
       setUsersList([]);
+      setLoadError(t('userManagement.gatewayDisconnected'));
       return;
     }
 
     try {
       const list = await fetchUsers();
       setUsersList(Array.isArray(list) ? list : []);
+      setLoadError(null);
     } catch (err) {
-      console.error('Failed to fetch users:', err);
+      setUsersList([]);
+      setLoadError(err?.message || t('userManagement.gatewayDisconnected'));
     }
-  }, [isConnected, fetchUsers]);
+  }, [isConnected, fetchUsers, t]);
 
   useFocusEffect(
     useCallback(() => {
-      loadUsers();
+      void loadUsers();
     }, [loadUsers]),
   );
 
@@ -127,7 +143,7 @@ export default function UserManagement({ navigation }) {
     }
 
     const interval = setInterval(() => {
-      loadUsers();
+      void loadUsers();
     }, 10000);
 
     return () => clearInterval(interval);
@@ -135,14 +151,17 @@ export default function UserManagement({ navigation }) {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadUsers();
-    setRefreshing(false);
+    try {
+      await loadUsers();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleDelete = (user) => {
     Alert.alert(
-      'Supprimer utilisateur',
-      `Supprimer ${user.username} ?`,
+      t('userManagement.deleteConfirmTitle'),
+      t('userManagement.deleteConfirmDesc', { username: user.username }),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
@@ -153,7 +172,7 @@ export default function UserManagement({ navigation }) {
               await deleteUser(user.id);
               await loadUsers();
             } catch (error) {
-              Alert.alert(t('common.error'), error?.message || 'Suppression impossible.');
+              Alert.alert(t('common.error'), error?.message || t('userManagement.deleteErrorDesc'));
             }
           },
         },
@@ -225,7 +244,7 @@ export default function UserManagement({ navigation }) {
         )}
         ListEmptyComponent={(
           <Text style={styles.emptyText}>
-            {isConnected ? t('accessHistory.noEvents') : t('userManagement.gatewayDisconnected')}
+            {loadError || (isConnected ? t('accessHistory.noEvents') : t('userManagement.gatewayDisconnected'))}
           </Text>
         )}
         contentContainerStyle={styles.scrollContent}

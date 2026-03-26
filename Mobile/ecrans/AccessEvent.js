@@ -67,10 +67,28 @@ export default function AccessEvent({ navigation, route }) {
   const { t } = useTranslation();
   const event = route?.params?.event;
   const eventId = event?.id || 'EVT-8743';
-  const eventName = event?.name || 'John Mitchell';
+  const eventName = event?.username || event?.name || t('common.unknownUser');
   const eventTime = event?.time || '14:23:45';
   const eventStatus = event?.status || 'GRANTED';
-  const eventScore = event?.score || '98.7%';
+  const eventStatusLabel =
+    eventStatus === 'GRANTED'
+      ? t('accessHistory.granted')
+      : eventStatus === 'DENIED'
+        ? t('accessHistory.denied')
+        : eventStatus;
+  const rawScore = event?.score;
+  const numericScore =
+    typeof rawScore === 'number'
+      ? rawScore
+      : typeof rawScore === 'string'
+        ? Number.parseFloat(rawScore.replace('%', ''))
+        : Number.NaN;
+  const eventScore = Number.isFinite(numericScore)
+    ? `${numericScore <= 1 ? (numericScore * 100).toFixed(1) : numericScore.toFixed(1)}%`
+    : '98.7%';
+  const eventConfidenceJson = Number.isFinite(numericScore)
+    ? (numericScore <= 1 ? numericScore : numericScore / 100).toFixed(3)
+    : '0.987';
   const userSlug = eventName.toLowerCase().replace(/\s+/g, '.');
 
   const statusColor =
@@ -97,7 +115,7 @@ export default function AccessEvent({ navigation, route }) {
         <View style={styles.titleSection}>
           <Text style={styles.pageTitle}>{eventId}</Text>
           <View style={[styles.statusBadge, { borderColor: statusColor, backgroundColor: `${statusColor}15` }]}>
-            <Text style={[styles.statusText, { color: statusColor }]}>{eventStatus}</Text>
+            <Text style={[styles.statusText, { color: statusColor }]}>{eventStatusLabel}</Text>
           </View>
         </View>
 
@@ -164,7 +182,7 @@ export default function AccessEvent({ navigation, route }) {
           <CodeBlock
             title={t('accessEvent.authResponse')}
             topic="bioguard/res/access/scan/mobile-demo"
-            payload={`{\n  "eventId": "${eventId}",\n  "result": "${eventStatus}",\n  "confidence": ${eventScore === '--' ? 'null' : (Number(eventScore.replace('%', '')) / 100).toFixed(3)},\n  "userId": "${userSlug}",\n  "timestamp": "2024-01-15T14:23:44.956Z",\n  "doorAction": "UNLOCK_5S"\n}`}
+            payload={`{\n  "eventId": "${eventId}",\n  "result": "${eventStatusLabel}",\n  "confidence": ${eventConfidenceJson},\n  "userId": "${userSlug}",\n  "timestamp": "2024-01-15T14:23:44.956Z",\n  "doorAction": "UNLOCK_5S"\n}`}
           />
         </View>
 

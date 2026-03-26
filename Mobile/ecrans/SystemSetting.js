@@ -217,8 +217,16 @@ export default function SystemSetting({ navigation }) {
                 value={cameraData?.mock_mode ? t('common.warning') : t('common.success')}
                 accent={cameraData?.mock_mode ? COLORS.neonAmber : COLORS.neonGreen}
               />
-              <TelemetryItem label={t('systemSettings.greenLedState')} value={lightingData?.green_led_on ? 'ON' : 'OFF'} />
-              <TelemetryItem label={t('systemSettings.redLedState')} value={lightingData?.red_led_on ? 'ON' : 'OFF'} />
+              <TelemetryItem
+                label={t('systemSettings.greenLedState')}
+                value={lightingData?.green_led_on ? t('common.online') : t('common.offline')}
+                accent={lightingData?.green_led_on ? COLORS.neonGreen : COLORS.textDim}
+              />
+              <TelemetryItem
+                label={t('systemSettings.redLedState')}
+                value={lightingData?.red_led_on ? t('common.online') : t('common.offline')}
+                accent={lightingData?.red_led_on ? COLORS.neonRed : COLORS.textDim}
+              />
               <TelemetryItem label={t('systemSettings.lcdLine1')} value={lcdData?.line1 || '--'} />
               <TelemetryItem label={t('systemSettings.lcdLine2')} value={lcdData?.line2 || '--'} />
             </View>

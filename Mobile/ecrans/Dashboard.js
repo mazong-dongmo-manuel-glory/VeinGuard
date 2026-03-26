@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  Animated,
   Platform,
   Alert,
   useWindowDimensions,
@@ -15,112 +14,18 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { COLORS, GRADIENTS, SHADOWS } from '../theme';
+import { COLORS, GRADIENTS } from '../theme';
 import { useAuthStore } from '../store/authStore';
-
-const devices = [
-  {
-    id: 'BG-RPI-01',
-    roleKey: 'dashboard.primaryAccessHub',
-    status: 'ONLINE',
-    statusColor: COLORS.neonGreen,
-    heartbeatType: 'seconds',
-    heartbeatValue: 2,
-    rssi: '-42 dBm',
-    battery: '87%',
-    firmware: 'v2.4.1',
-  },
-  {
-    id: 'BG-NODE-02',
-    roleKey: 'dashboard.secondarySensorNode',
-    status: 'OFFLINE',
-    statusColor: COLORS.neonRed,
-    heartbeatType: 'minutes',
-    heartbeatValue: 5,
-    rssi: '-',
-    battery: '12%',
-    firmware: 'v2.3.8',
-  },
-  {
-    id: 'BG-NODE-03',
-    roleKey: 'dashboard.accessControl',
-    status: 'ONLINE',
-    statusColor: COLORS.neonGreen,
-    heartbeatType: 'seconds',
-    heartbeatValue: 1,
-    rssi: '-38 dBm',
-    battery: 'ac_mains',
-    firmware: 'v2.4.1',
-  },
-];
-
-function PulsingDot({ color }) {
-  const anim = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-  return (
-    <Animated.View
-      style={[styles.statusDot, { backgroundColor: color, opacity: anim }]}
-    />
-  );
-}
-
-function DeviceCard({ device }) {
-  const { t } = useTranslation();
-  const isOnline = device.status === 'ONLINE';
-  const heartbeat =
-    device.heartbeatType === 'minutes'
-      ? t('dashboard.minutesAgo', { count: device.heartbeatValue })
-      : t('dashboard.secondsAgo', { count: device.heartbeatValue });
-  const batteryLabel = device.battery === 'ac_mains' ? t('dashboard.acMains') : device.battery;
-  const displayStatus = isOnline ? t('dashboard.onlineStatus') : t('dashboard.offlineStatus');
-  
-  return (
-    <BlurView intensity={15} tint="dark" style={[styles.deviceCard, { borderColor: isOnline ? 'rgba(0, 242, 255, 0.2)' : 'rgba(255, 61, 90, 0.2)' }]}>
-      <View style={styles.deviceHeader}>
-        <View style={styles.deviceHeaderMain}>
-          <Text numberOfLines={1} style={[styles.deviceId, { color: isOnline ? COLORS.neonCyan : COLORS.neonRed }]}>
-            {device.id}
-          </Text>
-          <Text numberOfLines={2} style={styles.deviceRole}>{t(device.roleKey)}</Text>
-        </View>
-        <PulsingDot color={isOnline ? COLORS.neonGreen : COLORS.neonRed} />
-      </View>
-
-      <View style={styles.deviceStats}>
-        <View style={styles.statLine}>
-          <Text style={styles.statLabel}>{t('dashboard.status')}</Text>
-          <Text style={[styles.statValue, { color: device.statusColor }]}>{displayStatus}</Text>
-        </View>
-        <View style={styles.statGrid}>
-          <View style={styles.statBox}>
-            <Ionicons name="wifi" size={14} color={COLORS.textSecondary} />
-            <Text style={styles.statBoxVal}>{device.rssi}</Text>
-            <Text style={styles.statBoxLabel}>{t('dashboard.rssi')}</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Ionicons name="battery-dead" size={14} color={COLORS.textSecondary} />
-            <Text style={styles.statBoxVal}>{batteryLabel}</Text>
-            <Text style={styles.statBoxLabel}>{t('dashboard.battery')}</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Ionicons name="pulse" size={14} color={COLORS.textSecondary} />
-            <Text style={styles.statBoxVal}>{heartbeat}</Text>
-            <Text style={styles.statBoxLabel}>{t('dashboard.heartbeat')}</Text>
-          </View>
-        </View>
-      </View>
-    </BlurView>
-  );
-}
-
 import { useMqttStore } from '../store/mqttStore';
+
+function SummaryItem({ label, value, accent = COLORS.white }) {
+  return (
+    <View style={styles.summaryItem}>
+      <Text style={styles.summaryLabel}>{label}</Text>
+      <Text style={[styles.summaryValue, { color: accent }]}>{value}</Text>
+    </View>
+  );
+}
 
 export default function Dashboard({ navigation }) {
   const { t } = useTranslation();
@@ -130,6 +35,8 @@ export default function Dashboard({ navigation }) {
   
   const systemStatus = useMqttStore((state) => state.status);
   const isConnected = useMqttStore((state) => state.isConnected);
+  const telemetry = useMqttStore((state) => state.telemetry);
+  const statusPayload = useMqttStore((state) => state.statusPayload);
   const logout = useAuthStore((state) => state.logout);
   const systemStatusLabel =
     systemStatus === 'ONLINE'
@@ -166,7 +73,17 @@ export default function Dashboard({ navigation }) {
     );
   };
 
-  const viewportWidth = Math.min(width, 600);
+  const deviceId = telemetry?.device_id || statusPayload?.device_id || '--';
+  const cameraState = telemetry?.camera?.available ? t('systemSettings.cameraAvailable') : t('common.offline');
+  const lightState = telemetry?.light_sensor?.is_dark == null
+    ? '--'
+    : telemetry.light_sensor.is_dark
+      ? t('systemSettings.lightDark')
+      : t('systemSettings.lightBright');
+  const lastUpdateSource = telemetry?.captured_at || statusPayload?.timestamp;
+  const lastUpdate = lastUpdateSource
+    ? new Date(lastUpdateSource).toLocaleTimeString()
+    : '--:--:--';
 
   return (
     <View style={styles.screen}>
@@ -236,40 +153,16 @@ export default function Dashboard({ navigation }) {
           </View>
         </View>
 
-        {/* Device Section */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('dashboard.activeNodes')}</Text>
-          <Text style={styles.nodeCount}>{t('dashboard.nodeCount', { count: devices.filter((device) => device.status === 'ONLINE').length })}</Text>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.deviceScroll}>
-          {devices.map((d) => (
-            <DeviceCard key={d.id} device={d} />
-          ))}
-        </ScrollView>
-
-        {/* Broker Status */}
-        <BlurView intensity={15} tint="dark" style={styles.brokerCard}>
-          <View style={styles.brokerHeader}>
-            <Ionicons name="radio" size={18} color={COLORS.neonCyan} />
-            <Text style={styles.brokerTitle}>{t('dashboard.brokerTitle')}</Text>
-            <Text style={styles.brokerStatus}>99,9 % {t('dashboard.uptime')}</Text>
+        <BlurView intensity={15} tint="dark" style={styles.summaryCard}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t('dashboard.systemStatus')}</Text>
+            <Text style={styles.nodeCount}>{systemStatusLabel}</Text>
           </View>
-          <View style={styles.brokerStats}>
-            <View style={styles.brokerStat}>
-              <Text style={styles.statNum}>47</Text>
-              <Text style={styles.statSubtitle}>{t('dashboard.messagesPerSecond')}</Text>
-            </View>
-            <View style={styles.vLine} />
-            <View style={styles.brokerStat}>
-              <Text style={styles.statNum}>12</Text>
-              <Text style={styles.statSubtitle}>{t('dashboard.topics')}</Text>
-            </View>
-            <View style={styles.vLine} />
-            <View style={styles.brokerStat}>
-              <Text style={styles.statNum}>0</Text>
-              <Text style={styles.statSubtitle}>{t('dashboard.dropped')}</Text>
-            </View>
+          <View style={[styles.summaryGrid, isCompact && styles.summaryGridCompact]}>
+            <SummaryItem label={t('accessDecision.deviceLabel')} value={deviceId} accent={COLORS.neonCyan} />
+            <SummaryItem label={t('systemSettings.cameraTitle')} value={cameraState} accent={telemetry?.camera?.available ? COLORS.neonGreen : COLORS.neonRed} />
+            <SummaryItem label={t('systemSettings.lightSensorTitle')} value={lightState} accent={telemetry?.light_sensor?.is_dark ? COLORS.neonAmber : COLORS.neonGreen} />
+            <SummaryItem label={t('dashboard.lastUpdate')} value={lastUpdate} />
           </View>
         </BlurView>
 
@@ -292,6 +185,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  headerRight: { alignItems: 'flex-end' },
   headerTime: { color: COLORS.white, fontWeight: '700', fontSize: 16 },
   vDivider: { width: 1, height: 16, backgroundColor: 'rgba(255, 255, 255, 0.2)', marginHorizontal: 12 },
   logoVein: { color: COLORS.white, fontWeight: '900', fontSize: 16, letterSpacing: 1 },
@@ -352,41 +246,44 @@ const styles = StyleSheet.create({
   sectionTitle: { color: COLORS.textDim, fontSize: 12, fontWeight: '800', letterSpacing: 2 },
   nodeCount: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '700', textAlign: 'right' },
 
-  deviceScroll: { paddingRight: 20, gap: 15 },
-  deviceCard: {
-    width: 250,
-    backgroundColor: 'rgba(13, 27, 46, 0.4)',
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-  },
-  deviceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
-  deviceHeaderMain: { flex: 1, minWidth: 0, paddingRight: 12 },
-  deviceId: { fontSize: 18, fontWeight: '900', letterSpacing: 1 },
-  deviceRole: { color: COLORS.textSecondary, fontSize: 10, marginTop: 4, letterSpacing: 1, lineHeight: 14 },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  
-  statLine: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
-  statLabel: { color: COLORS.textSecondary, fontSize: 12 },
-  statValue: { fontSize: 12, fontWeight: '700' },
-  statGrid: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: 12, padding: 12 },
-  statBox: { alignItems: 'center', gap: 4, flex: 1, minWidth: 0 },
-  statBoxVal: { color: COLORS.white, fontSize: 11, fontWeight: '700', textAlign: 'center' },
-  statBoxLabel: { color: COLORS.textDim, fontSize: 8, fontWeight: '600' },
-
-  brokerCard: {
-    marginTop: 20,
+  summaryCard: {
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
   },
-  brokerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 10, flexWrap: 'wrap' },
-  brokerTitle: { flex: 1, minWidth: 140, color: COLORS.white, fontSize: 12, fontWeight: '800', letterSpacing: 1, lineHeight: 16 },
-  brokerStatus: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '700' },
-  brokerStats: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
-  brokerStat: { alignItems: 'center' },
-  statNum: { color: COLORS.white, fontSize: 24, fontWeight: '900' },
-  statSubtitle: { color: COLORS.textDim, fontSize: 10, fontWeight: '700', marginTop: 4 },
-  vLine: { width: 1, height: 30, backgroundColor: 'rgba(255, 255, 255, 0.05)' },
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  summaryGridCompact: {
+    flexDirection: 'column',
+  },
+  summaryItem: {
+    minHeight: 88,
+    minWidth: '47%',
+    flexGrow: 1,
+    flexBasis: '47%',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+    gap: 8,
+  },
+  summaryLabel: {
+    color: COLORS.textDim,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  summaryValue: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '900',
+    lineHeight: 18,
+  },
 });

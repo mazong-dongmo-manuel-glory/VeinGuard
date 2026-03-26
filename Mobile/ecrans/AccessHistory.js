@@ -59,7 +59,7 @@ function EventItem({ item, onPress, compact, showTechnicalDetails }) {
         </View>
         <View style={styles.eventBody}>
           <View style={styles.eventHeader}>
-            <Text numberOfLines={1} style={styles.eventName}>{(item.username || 'UTILISATEUR INCONNU').toUpperCase()}</Text>
+            <Text numberOfLines={1} style={styles.eventName}>{(item.username || t('common.unknownUser')).toUpperCase()}</Text>
             <Text style={styles.eventTime}>{new Date(item.timestamp).toLocaleTimeString()}</Text>
           </View>
           {showTechnicalDetails ? (

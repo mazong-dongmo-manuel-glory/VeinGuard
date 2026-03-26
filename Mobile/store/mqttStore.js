@@ -108,28 +108,43 @@ export const useMqttStore = create((set, get) => ({
 
     const brokerConfig = normalizeBrokerConfig(get().brokerConfig);
     const brokerUrl = buildMqttBrokerUrl(brokerConfig);
+    let client = null;
 
-    const client = mqtt.connect(brokerUrl, {
-      clientId: get().clientId,
-      clean: true,
-      reconnectPeriod: 5000,
-      username: brokerConfig.username || undefined,
-      password: brokerConfig.password || undefined,
-    });
+    try {
+      client = mqtt.connect(brokerUrl, {
+        clientId: get().clientId,
+        clean: true,
+        reconnectPeriod: 5000,
+        username: brokerConfig.username || undefined,
+        password: brokerConfig.password || undefined,
+      });
+    } catch (error) {
+      set({
+        client: null,
+        isConnected: false,
+        status: 'ERROR',
+        lastError: error?.message || 'MQTT connection error',
+      });
+      return;
+    }
 
     client.on('connect', () => {
-      set({ isConnected: true, status: 'ONLINE', lastError: null });
-      client.subscribe(responseTopic('auth/login', get().clientId));
-      client.subscribe(responseTopic('users/list', get().clientId));
-      client.subscribe(responseTopic('users/update', get().clientId));
-      client.subscribe(responseTopic('users/delete', get().clientId));
-      client.subscribe(responseTopic('access/logs', get().clientId));
-      client.subscribe(responseTopic('audit/list', get().clientId));
-      client.subscribe(responseTopic('access/scan', get().clientId));
-      client.subscribe(responseTopic('users/enroll', get().clientId));
-      client.subscribe(responseTopic('settings/update', get().clientId));
-      client.subscribe(MQTT_TOPICS.status);
-      client.subscribe(MQTT_TOPICS.telemetry);
+      try {
+        set({ isConnected: true, status: 'ONLINE', lastError: null });
+        client.subscribe(responseTopic('auth/login', get().clientId));
+        client.subscribe(responseTopic('users/list', get().clientId));
+        client.subscribe(responseTopic('users/update', get().clientId));
+        client.subscribe(responseTopic('users/delete', get().clientId));
+        client.subscribe(responseTopic('access/logs', get().clientId));
+        client.subscribe(responseTopic('audit/list', get().clientId));
+        client.subscribe(responseTopic('access/scan', get().clientId));
+        client.subscribe(responseTopic('users/enroll', get().clientId));
+        client.subscribe(responseTopic('settings/update', get().clientId));
+        client.subscribe(MQTT_TOPICS.status);
+        client.subscribe(MQTT_TOPICS.telemetry);
+      } catch (error) {
+        set({ lastError: error?.message || 'MQTT subscribe error' });
+      }
     });
 
     client.on('message', (topicName, payload) => {
@@ -157,15 +172,21 @@ export const useMqttStore = create((set, get) => ({
         if (topicName === responseTopic('settings/update', get().clientId)) {
           set({ settingsAck: data, telemetry: data.telemetry || get().telemetry });
         }
-      } catch {
+      } catch (error) {
         if (topicName === MQTT_TOPICS.status) {
           set({ status: 'ONLINE' });
+          return;
         }
+        set({ lastError: error?.message || 'MQTT message error' });
       }
     });
 
-    client.on('close', () => set({ isConnected: false, status: 'OFFLINE', statusPayload: null, client: null }));
-    client.on('error', (error) => set({ isConnected: false, status: 'ERROR', lastError: error?.message || 'MQTT error' }));
+    client.on('close', () => {
+      set({ isConnected: false, status: 'OFFLINE', statusPayload: null, client: null });
+    });
+    client.on('error', (error) => {
+      set({ isConnected: false, status: 'ERROR', lastError: error?.message || 'MQTT error' });
+    });
 
     set({ client });
   },
@@ -210,13 +231,27 @@ export const useMqttStore = create((set, get) => ({
       };
 
       client.on('message', handler);
-      client.publish(
-        cmdTopic,
-        JSON.stringify({
-          ...payload,
-          client_id: get().clientId,
-        })
-      );
+      try {
+        client.publish(
+          cmdTopic,
+          JSON.stringify({
+            ...payload,
+            client_id: get().clientId,
+          }),
+          (error) => {
+            if (!error) {
+              return;
+            }
+            clearTimeout(timer);
+            client.removeListener('message', handler);
+            reject(error);
+          },
+        );
+      } catch (error) {
+        clearTimeout(timer);
+        client.removeListener('message', handler);
+        reject(error);
+      }
     });
   },
 

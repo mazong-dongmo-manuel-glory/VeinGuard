@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Text, View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 import Login from '../ecrans/Login';
 import Dashboard from '../ecrans/Dashboard';
@@ -105,6 +106,8 @@ function UserStackScreen() {
 }
 
 function MainTabs() {
+  const { t } = useTranslation();
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -132,7 +135,7 @@ function MainTabs() {
         name="DashboardTab"
         component={Dashboard}
         options={{
-          tabBarLabel: 'ACCUEIL',
+          tabBarLabel: t('navigation.home'),
           tabBarIcon: ({ focused }) => (
             <TabIcon name="home-outline" focused={focused} />
           ),
@@ -144,7 +147,7 @@ function MainTabs() {
         name="AccessHistory"
         component={HistoryStackScreen}
         options={{
-          tabBarLabel: 'HISTORIQUE',
+          tabBarLabel: t('navigation.history'),
           tabBarIcon: ({ focused }) => (
             <TabIcon name="time-outline" focused={focused} />
           ),
@@ -167,7 +170,7 @@ function MainTabs() {
         name="UserManagement"
         component={UserStackScreen}
         options={{
-          tabBarLabel: 'UTILISATEURS',
+          tabBarLabel: t('navigation.users'),
           tabBarIcon: ({ focused }) => (
             <TabIcon name="people-outline" focused={focused} />
           ),
@@ -179,7 +182,7 @@ function MainTabs() {
         name="SystemSetting"
         component={SystemSetting}
         options={{
-          tabBarLabel: 'PARAMÈTRES',
+          tabBarLabel: t('navigation.settings'),
           tabBarIcon: ({ focused }) => (
             <TabIcon name="settings-outline" focused={focused} />
           ),
