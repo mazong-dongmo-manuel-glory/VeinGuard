@@ -14,7 +14,6 @@ import config
 import database
 from biometrics.biometrics_service import (
     build_enrollment_profile,
-    build_identification_profile,
     verify_identification_profile,
 )
 from cloud.firebase_service import FirebaseService
@@ -103,50 +102,23 @@ class BioGuardMQTTGateway:
 
         try:
             self.controller.handle_scanning()
-            scan_frames = []
-            last_capture = None
-            for sample_index in range(1, config.IDENTIFICATION_SAMPLE_COUNT + 1):
-                self.publish_status(
-                    "ONLINE",
-                    phase="IDENTIFICATION",
-                    sample_index=sample_index,
-                    sample_count=config.IDENTIFICATION_SAMPLE_COUNT,
-                )
-                self.controller.lcd.show_message(
-                    f"Scan {sample_index}/{config.IDENTIFICATION_SAMPLE_COUNT}",
-                    "Ne bouge pas",
-                )
-                self._publish_preview_frames(frame_count=2, interval_seconds=0.12)
+            self.publish_status(
+                "ONLINE",
+                phase="IDENTIFICATION",
+                sample_index=1,
+                sample_count=1,
+            )
+            self.controller.lcd.show_message("Scan 1/1", "Ne bouge pas")
+            try:
                 capture = self.controller.capture_attempt(
                     claimed_user_id=user_id,
                     persist_preview=False,
-                    precompute_profile=False,
+                    precompute_profile=True,
                     activate_mode=False,
                 )
-                scan_frames.append(capture["frame"])
                 last_capture = capture
                 self._publish_telemetry_payload(capture["telemetry"])
-                time.sleep(0.15)
-            if not scan_frames:
-                exc = ValueError("Aucune capture exploitable pour l'identification.")
-                self.controller.handle_access_denied("Main absente")
-                self._record_access(
-                    user_id=user_id,
-                    username=data.get("username"),
-                    status="DENIED",
-                    score=None,
-                    reason="INVALID_CAPTURE",
-                    method="multimodal_scan",
-                    modalities={"error": str(exc)},
-                )
-                self.client.publish(
-                    response_topic,
-                    json.dumps({"status": "fail", "reason": "INVALID_CAPTURE", "error": str(exc)}),
-                )
-                return
-
-            try:
-                live_identification_profile = build_identification_profile(scan_frames)
+                live_identification_profile = capture["profile"]
             except Exception as exc:
                 self.controller.handle_access_denied("Main absente")
                 self._record_access(
@@ -158,8 +130,8 @@ class BioGuardMQTTGateway:
                     method="multimodal_scan",
                     modalities={
                         "error": str(exc),
-                        "captured_frame_count": len(scan_frames),
-                        "telemetry": last_capture["telemetry"] if last_capture else None,
+                        "captured_frame_count": 1,
+                        "telemetry": last_capture["telemetry"] if 'last_capture' in locals() and last_capture else None,
                     },
                 )
                 self.client.publish(
@@ -216,7 +188,7 @@ class BioGuardMQTTGateway:
                     method="multimodal_scan",
                     modalities={
                         "telemetry": last_capture["telemetry"] if last_capture else None,
-                        "captured_frame_count": len(scan_frames),
+                        "captured_frame_count": 1,
                         "best_candidate": best_candidate_info,
                     },
                 )
@@ -297,39 +269,36 @@ class BioGuardMQTTGateway:
 
         try:
             self.controller.handle_enrollment(user_id)
-
-            enrollment_frames = []
-            preview_paths = []
+            frames: list = []
+            preview_paths: list[str] = []
             last_capture_telemetry = None
-            for sample_index in range(1, config.ENROLLMENT_SAMPLE_COUNT + 1):
+            sample_count = max(1, int(config.ENROLLMENT_SAMPLE_COUNT))
+
+            for sample_index in range(1, sample_count + 1):
                 self.publish_status(
                     "ONLINE",
                     phase="ENROLLMENT",
                     sample_index=sample_index,
-                    sample_count=config.ENROLLMENT_SAMPLE_COUNT,
+                    sample_count=sample_count,
                 )
                 self.controller.lcd.show_message(
-                    f"Photo {sample_index}/{config.ENROLLMENT_SAMPLE_COUNT}",
+                    f"Photo {sample_index}/{sample_count}",
                     user_id[: config.LCD_COLS],
                 )
-                self._publish_preview_frames(frame_count=2, interval_seconds=0.15)
                 capture = self.controller.capture_attempt(
-                    claimed_user_id=f"{user_id}_{sample_index}",
+                    claimed_user_id=user_id,
                     profile_mode="enrollment",
-                    precompute_profile=False,
+                    precompute_profile=True,
                     activate_mode=False,
                 )
-                enrollment_frames.append(capture["frame"])
+                frames.append(capture["frame"])
                 last_capture_telemetry = capture["telemetry"]
                 self._publish_telemetry_payload(capture["telemetry"])
                 if capture["preview_path"]:
                     preview_paths.append(capture["preview_path"])
-                self.controller.lcd.show_message(
-                    f"Capture {sample_index}",
-                    "Photo enregistree",
-                )
-                time.sleep(0.4)
-            profile = build_enrollment_profile(enrollment_frames)
+                time.sleep(0.35)
+
+            profile = build_enrollment_profile(frames)
         except Exception as exc:
             self.controller.reset_idle()
             self.client.publish(response_topic, json.dumps({"status": "error", "error": str(exc)}))

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   View,
@@ -18,7 +18,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, GRADIENTS } from '../theme';
 import { useMqttStore } from '../store/mqttStore';
 import { MQTT_TOPICS } from '../config';
@@ -87,11 +86,9 @@ export default function VeinScanBiometrics({ navigation }) {
   const isConnected = useMqttStore((state) => state.isConnected);
   const gatewayOnline = useMqttStore((state) => state.gatewayOnline);
   const triggerScan = useMqttStore((state) => state.triggerScan);
-  const startCameraPreview = useMqttStore((state) => state.startCameraPreview);
-  const stopCameraPreview = useMqttStore((state) => state.stopCameraPreview);
   const telemetry = useMqttStore((state) => state.telemetry);
   const lastScanResult = useMqttStore((state) => state.lastScanResult);
-  const previewBase64 = telemetry?.camera?.preview_jpeg_base64;
+  const previewBase64 = telemetry?.camera?.processed_jpeg_base64 || telemetry?.camera?.preview_jpeg_base64;
   const previewUri = previewBase64 ? `data:image/jpeg;base64,${previewBase64}` : null;
   const serverAvailable = gatewayOnline || isConnected;
 
@@ -112,18 +109,6 @@ export default function VeinScanBiometrics({ navigation }) {
     }
   }, [scanning]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (isConnected) {
-        startCameraPreview('scan').catch(() => {});
-      }
-
-      return () => {
-        stopCameraPreview().catch(() => {});
-      };
-    }, [isConnected, startCameraPreview, stopCameraPreview])
-  );
-
   const handleScanToggle = async () => {
     if (!serverAvailable) {
         Alert.alert(t('veinScan.offlineTitle'), t('veinScan.offlineDesc'));
@@ -137,11 +122,9 @@ export default function VeinScanBiometrics({ navigation }) {
           if (response?.status === 'success' && response?.result === 'GRANTED') {
             navigation?.navigate('AccessDecision', { event: response.event });
           } else {
-            startCameraPreview('scan').catch(() => {});
             Alert.alert(t('veinScan.scanErrorTitle'), buildFailureMessage(t, response));
           }
         } catch (error) {
-          startCameraPreview('scan').catch(() => {});
           setScanning(false);
           Alert.alert(t('veinScan.scanErrorTitle'), t('veinScan.identificationFailedDesc'));
           return;

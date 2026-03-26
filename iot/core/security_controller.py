@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from biometrics.biometrics_service import build_multimodal_profile
+from biometrics.biometrics_service import analyze_hand_frame
 from hardware.buzzer import Buzzer
 from hardware.camera import AccessCamera
 from hardware.lcd import LCDDisplay
@@ -182,8 +182,9 @@ class SecurityController:
 
         profile = None
         if precompute_profile:
-            # Precompute profile to surface segmentation failures early.
-            profile = build_multimodal_profile(frame, mode=profile_mode)
+            analysis = analyze_hand_frame(frame, mode=profile_mode)
+            profile = analysis["profile"]
+            telemetry["camera"]["processed_jpeg_base64"] = analysis["processed_jpeg_base64"]
 
         return {
             "frame": frame,
