@@ -547,6 +547,165 @@ def _extract_histogram(image: np.ndarray, mask: np.ndarray | None) -> list[float
     return [round(float(value), 6) for value in histogram.tolist()]
 
 
+def _smooth_1d(values: np.ndarray, kernel_size: int = 9) -> np.ndarray:
+    if values.size <= 2:
+        return values.astype(np.float32)
+    kernel_size = max(3, int(kernel_size))
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+    kernel = np.ones(kernel_size, dtype=np.float32) / float(kernel_size)
+    return np.convolve(values.astype(np.float32), kernel, mode="same")
+
+
+def _resample_vector(values: list[float] | np.ndarray, sample_count: int) -> list[float]:
+    array = np.array(values, dtype=np.float32)
+    if array.size == 0:
+        return [0.0] * sample_count
+    if array.size == sample_count:
+        return [round(float(value), 6) for value in array.tolist()]
+    x = np.linspace(0.0, 1.0, array.size)
+    xi = np.linspace(0.0, 1.0, sample_count)
+    return [round(float(value), 6) for value in np.interp(xi, x, array).tolist()]
+
+
+def _resample_contour(contour: np.ndarray, sample_count: int = 128) -> np.ndarray:
+    points = contour.reshape(-1, 2).astype(np.float32)
+    if len(points) == 0:
+        return np.zeros((sample_count, 2), dtype=np.float32)
+    if len(points) == 1:
+        return np.repeat(points, sample_count, axis=0)
+    indices = np.linspace(0, len(points) - 1, sample_count)
+    x = np.interp(indices, np.arange(len(points)), points[:, 0])
+    y = np.interp(indices, np.arange(len(points)), points[:, 1])
+    return np.stack((x, y), axis=1).astype(np.float32)
+
+
+def _extract_hand_pattern_features(normalized_mask: np.ndarray) -> dict[str, Any]:
+    height, width = normalized_mask.shape[:2]
+    contour = _largest_contour(normalized_mask)
+    if contour is None:
+        raise ValueError("Contour entier de la main introuvable dans la ROI normalisee.")
+
+    contour_points = contour.reshape(-1, 2)
+    moments = cv2.moments(contour)
+    centroid_x = (moments["m10"] / moments["m00"]) if moments["m00"] else float(width / 2.0)
+    centroid_y = (moments["m01"] / moments["m00"]) if moments["m00"] else float(height / 2.0)
+
+    top_profile = np.full(width, height, dtype=np.float32)
+    for x in range(width):
+        ys = np.where(normalized_mask[:, x] > 0)[0]
+        if ys.size:
+            top_profile[x] = float(ys[0])
+    smooth_top = _smooth_1d(top_profile, kernel_size=max(7, width // 20))
+
+    tip_candidates: list[tuple[int, int]] = []
+    min_spacing = max(8, width // 10)
+    for x in range(6, width - 6):
+        current = smooth_top[x]
+        if current >= height - 1:
+            continue
+        window = smooth_top[x - 6:x + 7]
+        if current != np.min(window):
+            continue
+        left_max = float(np.max(smooth_top[max(0, x - 12):x]))
+        right_max = float(np.max(smooth_top[x + 1:min(width, x + 13)]))
+        prominence = min(left_max - current, right_max - current)
+        if prominence < height * 0.035:
+            continue
+        if tip_candidates and (x - tip_candidates[-1][0]) < min_spacing:
+            if current < tip_candidates[-1][1]:
+                tip_candidates[-1] = (x, int(current))
+            continue
+        tip_candidates.append((x, int(current)))
+
+    tip_candidates = sorted(tip_candidates, key=lambda item: item[0])[:5]
+
+    valleys: list[tuple[int, int]] = []
+    for left_tip, right_tip in zip(tip_candidates[:-1], tip_candidates[1:]):
+        segment = smooth_top[left_tip[0]:right_tip[0] + 1]
+        if segment.size == 0:
+            continue
+        local_x = int(np.argmax(segment))
+        valley_x = left_tip[0] + local_x
+        valley_y = int(segment[local_x])
+        valleys.append((valley_x, valley_y))
+
+    if valleys:
+        palm_base_y = float(np.mean([point[1] for point in valleys]))
+    else:
+        hand_pixels_y = np.where(normalized_mask > 0)[0]
+        palm_base_y = float(np.percentile(hand_pixels_y, 36)) if hand_pixels_y.size else float(height * 0.40)
+
+    def local_row_width(x: int, y: int) -> float:
+        y = int(np.clip(y, 0, height - 1))
+        x = int(np.clip(x, 0, width - 1))
+        row = normalized_mask[y]
+        if row[x] == 0:
+            hits = np.where(row > 0)[0]
+            if not hits.size:
+                return 0.0
+            x = int(hits[np.argmin(np.abs(hits - x))])
+        left = x
+        right = x
+        while left > 0 and row[left] > 0:
+            left -= 1
+        while right < width - 1 and row[right] > 0:
+            right += 1
+        return max(right - left - 1, 0) / float(max(width, 1))
+
+    finger_lengths = []
+    finger_widths = []
+    fingertip_points = []
+    for tip_x, tip_y in tip_candidates:
+        fingertip_points.append([int(tip_x), int(tip_y)])
+        finger_length = max((palm_base_y - tip_y) / float(max(height, 1)), 0.0)
+        finger_lengths.append(finger_length)
+        sample_y = tip_y + int(max((palm_base_y - tip_y) * 0.55, 4))
+        finger_widths.append(local_row_width(tip_x, sample_y))
+
+    while len(finger_lengths) < 5:
+        finger_lengths.append(0.0)
+        finger_widths.append(0.0)
+    finger_lengths = finger_lengths[:5]
+    finger_widths = finger_widths[:5]
+
+    width_profile = []
+    for y in np.linspace(height * 0.08, height * 0.95, 48):
+        row = normalized_mask[int(y)]
+        xs = np.where(row > 0)[0]
+        width_profile.append(((xs[-1] - xs[0] + 1) / float(width)) if xs.size else 0.0)
+
+    palm_width_row = int(np.clip(palm_base_y + (height * 0.08), 0, height - 1))
+    palm_row = normalized_mask[palm_width_row]
+    palm_hits = np.where(palm_row > 0)[0]
+    if palm_hits.size:
+        palm_width_ratio = (palm_hits[-1] - palm_hits[0] + 1) / float(width)
+        palm_width_segment = [int(palm_hits[0]), palm_width_row, int(palm_hits[-1]), palm_width_row]
+    else:
+        palm_width_ratio = 0.0
+        palm_width_segment = [0, palm_width_row, 0, palm_width_row]
+
+    resampled_contour = _resample_contour(contour, sample_count=128)
+    distances = np.sqrt((resampled_contour[:, 0] - centroid_x) ** 2 + (resampled_contour[:, 1] - centroid_y) ** 2)
+    scale = max(float(np.max(distances)), 1.0)
+    contour_signature = distances / scale
+
+    return {
+        "contour_signature": _resample_vector(contour_signature, 128),
+        "width_profile": _resample_vector(width_profile, 48),
+        "finger_lengths": _resample_vector(finger_lengths, 5),
+        "finger_widths": _resample_vector(finger_widths, 5),
+        "palm_width_ratio": round(float(palm_width_ratio), 6),
+        "palm_base_y_ratio": round(float(palm_base_y / max(height, 1)), 6),
+        "tip_count": len(tip_candidates),
+        "valley_count": len(valleys),
+        "tips": fingertip_points,
+        "valleys": [[int(x), int(y)] for x, y in valleys],
+        "palm_width_segment": palm_width_segment,
+        "normalized_contour": contour_points.astype(int).tolist(),
+    }
+
+
 def _quality_score(
     mask_fill_ratio: float,
     active_blocks: int,
@@ -660,23 +819,12 @@ def _capture_validation(geometry: dict[str, Any], quality: dict[str, Any], mode:
     }
 
 
-def _orientation_visualization(code: list[list[int]], mask: list[list[int]]) -> np.ndarray:
-    code_array = np.array(code, dtype=np.uint8)
-    mask_array = np.array(mask, dtype=np.uint8) > 0
-    hue_step = max(1, 180 // max(int(config.PALM_CODE_ORIENTATIONS), 1))
-    hue = (code_array * hue_step).astype(np.uint8)
-    saturation = np.where(mask_array, 255, 30).astype(np.uint8)
-    value = np.where(mask_array, 255, 40).astype(np.uint8)
-    hsv = cv2.merge((hue, saturation, value))
-    return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-
-
 def _render_processed_image(
     frame_bgr: np.ndarray,
     contour: np.ndarray,
     valleys: list[tuple[int, int]],
     normalized_gray: np.ndarray,
-    orientation_template: dict[str, Any],
+    hand_pattern: dict[str, Any],
     quality: dict[str, Any],
     validation: dict[str, Any],
 ) -> str:
@@ -685,20 +833,18 @@ def _render_processed_image(
     for valley in valleys:
         cv2.circle(original, valley, 8, (255, 160, 0), -1)
 
-    orientation_map = _orientation_visualization(
-        orientation_template["orientation_code"],
-        orientation_template["orientation_mask"],
-    )
-    orientation_map = cv2.resize(
-        orientation_map,
-        (normalized_gray.shape[1], normalized_gray.shape[0]),
-        interpolation=cv2.INTER_NEAREST,
-    )
     palm_bgr = cv2.cvtColor(normalized_gray, cv2.COLOR_GRAY2BGR)
-    palm_view = cv2.addWeighted(palm_bgr, 0.45, orientation_map, 0.55, 0.0)
+    contour_points = np.array(hand_pattern["normalized_contour"], dtype=np.int32).reshape(-1, 1, 2)
+    cv2.drawContours(palm_bgr, [contour_points], -1, (0, 255, 255), 2)
+    for tip_x, tip_y in hand_pattern["tips"]:
+        cv2.circle(palm_bgr, (int(tip_x), int(tip_y)), 5, (0, 255, 0), -1)
+    for valley_x, valley_y in hand_pattern["valleys"]:
+        cv2.circle(palm_bgr, (int(valley_x), int(valley_y)), 5, (255, 150, 0), -1)
+    x1, y1, x2, y2 = hand_pattern["palm_width_segment"]
+    cv2.line(palm_bgr, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 255), 2)
 
     left = cv2.resize(original, (360, 270), interpolation=cv2.INTER_AREA)
-    right = cv2.resize(palm_view, (360, 270), interpolation=cv2.INTER_LINEAR)
+    right = cv2.resize(palm_bgr, (360, 270), interpolation=cv2.INTER_LINEAR)
     composite = np.hstack((left, right))
     color = (0, 255, 0) if validation["valid"] else (0, 0, 255)
     cv2.putText(
@@ -713,7 +859,7 @@ def _render_processed_image(
     )
     cv2.putText(
         composite,
-        f"Blocs {quality['keypoints']}  Lignes {quality['line_strength']:.2f}",
+        f"Doigts {hand_pattern['tip_count']}  Paume {hand_pattern['palm_width_ratio']:.2f}",
         (16, 48),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.50,
@@ -723,7 +869,7 @@ def _render_processed_image(
     )
     cv2.putText(
         composite,
-        "ROI palmaire alignee",
+        "Main entiere normalisee",
         (385, 24),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.55,
@@ -756,15 +902,17 @@ def _profile_texture_fill_ratio(profile: dict[str, Any]) -> float:
 def generate_biometric_key(profile: dict[str, Any]) -> str:
     palmprint = profile.get("palmprint", {})
     geometry = palmprint.get("geometry", {})
-    histogram = palmprint.get("orientation_histogram") or palmprint.get("intensity_histogram") or []
+    hand_pattern = profile.get("hand_pattern", {})
     payload = {
         "aspect_ratio": round(float(geometry.get("aspect_ratio", 0.0)), 4),
         "solidity": round(float(geometry.get("solidity", 0.0)), 4),
         "extent": round(float(geometry.get("extent", 0.0)), 4),
         "valley_span_ratio": round(float(geometry.get("valley_span_ratio", 0.0)), 4),
-        "finger_peaks": int(geometry.get("finger_peaks", 0)),
-        "histogram": [round(float(value), 4) for value in histogram],
-        "texture_density": round(_profile_texture_density(profile), 5),
+        "contour_signature": [round(float(value), 4) for value in hand_pattern.get("contour_signature", [])[:32]],
+        "finger_lengths": [round(float(value), 4) for value in hand_pattern.get("finger_lengths", [])],
+        "finger_widths": [round(float(value), 4) for value in hand_pattern.get("finger_widths", [])],
+        "palm_width_ratio": round(float(hand_pattern.get("palm_width_ratio", 0.0)), 4),
+        "width_profile": [round(float(value), 4) for value in hand_pattern.get("width_profile", [])[:24]],
     }
     serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
@@ -785,6 +933,7 @@ def _analyze_profile(
     normalized = _normalize_palm_roi(gray_frame, hand_mask, contour, valleys)
     enhanced_gray, binary_lines = _enhance_palm_lines(normalized["normalized_gray"], normalized["normalized_mask"])
     orientation_template = _extract_orientation_template(enhanced_gray, normalized["normalized_mask"])
+    hand_pattern = _extract_hand_pattern_features(normalized["normalized_mask"])
 
     hand_pixels = max(int(np.count_nonzero(normalized["normalized_mask"])), 1)
     line_pixels = int(np.count_nonzero(binary_lines))
@@ -820,11 +969,12 @@ def _analyze_profile(
                 "grayscale",
                 "clahe",
                 "hand_contour",
-                "anatomical_roi_alignment",
-                "gabor_orientation_code",
+                "whole_hand_alignment",
+                "contour_signature",
+                "finger_width_length_profile",
             ],
         },
-        "modalities": ["palmprint", "hand_geometry", "finger_geometry"],
+        "modalities": ["hand_pattern", "hand_geometry", "finger_geometry"],
         "palmprint": {
             "geometry": geometry,
             "intensity_histogram": _extract_histogram(enhanced_gray, normalized["normalized_mask"]),
@@ -849,6 +999,7 @@ def _analyze_profile(
             "estimated_finger_gaps": geometry["convexity_defects"],
             "estimated_finger_peaks": geometry["finger_peaks"],
         },
+        "hand_pattern": hand_pattern,
     }
     profile["biometric_key"] = generate_biometric_key(profile)
     processed_jpeg_base64 = _render_processed_image(
@@ -856,7 +1007,7 @@ def _analyze_profile(
         contour,
         valleys,
         enhanced_gray,
-        orientation_template,
+        hand_pattern,
         quality,
         validation,
     )
@@ -940,6 +1091,32 @@ def _merge_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
     }
     histogram_length = len(base["palmprint"]["intensity_histogram"])
     best_sample = max(samples, key=lambda sample: sample["palmprint"]["quality"]["score"])
+    hand_pattern = {
+        "contour_signature": [
+            round(_mean_numeric([sample["hand_pattern"]["contour_signature"][index] for sample in samples]), 6)
+            for index in range(len(base["hand_pattern"]["contour_signature"]))
+        ],
+        "width_profile": [
+            round(_mean_numeric([sample["hand_pattern"]["width_profile"][index] for sample in samples]), 6)
+            for index in range(len(base["hand_pattern"]["width_profile"]))
+        ],
+        "finger_lengths": [
+            round(_mean_numeric([sample["hand_pattern"]["finger_lengths"][index] for sample in samples]), 6)
+            for index in range(len(base["hand_pattern"]["finger_lengths"]))
+        ],
+        "finger_widths": [
+            round(_mean_numeric([sample["hand_pattern"]["finger_widths"][index] for sample in samples]), 6)
+            for index in range(len(base["hand_pattern"]["finger_widths"]))
+        ],
+        "palm_width_ratio": round(_mean_numeric([sample["hand_pattern"]["palm_width_ratio"] for sample in samples]), 6),
+        "palm_base_y_ratio": round(_mean_numeric([sample["hand_pattern"]["palm_base_y_ratio"] for sample in samples]), 6),
+        "tip_count": int(round(_mean_numeric([sample["hand_pattern"]["tip_count"] for sample in samples]))),
+        "valley_count": int(round(_mean_numeric([sample["hand_pattern"]["valley_count"] for sample in samples]))),
+        "tips": best_sample["hand_pattern"].get("tips", []),
+        "valleys": best_sample["hand_pattern"].get("valleys", []),
+        "palm_width_segment": best_sample["hand_pattern"].get("palm_width_segment", [0, 0, 0, 0]),
+        "normalized_contour": best_sample["hand_pattern"].get("normalized_contour", []),
+    }
 
     fused = {
         "schema_version": "4.0",
@@ -977,6 +1154,7 @@ def _merge_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
             "estimated_finger_gaps": geometry["convexity_defects"],
             "estimated_finger_peaks": geometry["finger_peaks"],
         },
+        "hand_pattern": hand_pattern,
     }
     fused["biometric_key"] = generate_biometric_key(fused)
     return fused
@@ -1047,6 +1225,17 @@ def _relative_score(value_a: float, value_b: float) -> float:
     return min(abs(value_a - value_b) / denominator, 1.0)
 
 
+def _vector_score(values_a: list[float], values_b: list[float]) -> float:
+    a = np.array(values_a, dtype=np.float32)
+    b = np.array(values_b, dtype=np.float32)
+    if a.size == 0 or b.size == 0:
+        return 1.0
+    size = min(a.size, b.size)
+    a = a[:size]
+    b = b[:size]
+    return float(np.mean(np.abs(a - b)))
+
+
 def _orientation_code_score(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> float:
     live_code = np.array(live_profile["palmprint"]["orientation_code"], dtype=np.int16)
     ref_code = np.array(stored_profile["palmprint"]["orientation_code"], dtype=np.int16)
@@ -1067,6 +1256,8 @@ def _orientation_code_score(live_profile: dict[str, Any], stored_profile: dict[s
 def _compare_legacy_profiles(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> dict[str, Any]:
     live_geometry = live_profile["palmprint"]["geometry"]
     ref_geometry = stored_profile["palmprint"]["geometry"]
+    live_pattern = live_profile.get("hand_pattern", {})
+    ref_pattern = stored_profile.get("hand_pattern", {})
     geometry_score = float(
         np.mean(
             np.array(
@@ -1079,6 +1270,14 @@ def _compare_legacy_profiles(live_profile: dict[str, Any], stored_profile: dict[
                 dtype=np.float32,
             )
         )
+    )
+    finger_length_score = _vector_score(live_pattern.get("finger_lengths", []), ref_pattern.get("finger_lengths", []))
+    finger_width_score = _vector_score(live_pattern.get("finger_widths", []), ref_pattern.get("finger_widths", []))
+    width_profile_score = _vector_score(live_pattern.get("width_profile", []), ref_pattern.get("width_profile", []))
+    contour_score = _vector_score(live_pattern.get("contour_signature", []), ref_pattern.get("contour_signature", []))
+    palm_width_score = _relative_score(
+        float(live_pattern.get("palm_width_ratio", 0.0)),
+        float(ref_pattern.get("palm_width_ratio", 0.0)),
     )
 
     live_hist = np.array(live_profile["palmprint"].get("intensity_histogram", []), dtype=np.float32)
@@ -1094,7 +1293,17 @@ def _compare_legacy_profiles(live_profile: dict[str, Any], stored_profile: dict[
         hu_score = 1.0
 
     texture_score = _relative_score(_profile_texture_density(live_profile), _profile_texture_density(stored_profile))
-    palm_score = float(0.18 * geometry_score + 0.22 * hu_score + 0.48 * histogram_score + 0.12 * texture_score)
+    palm_score = float(
+        0.18 * contour_score
+        + 0.18 * width_profile_score
+        + 0.18 * finger_length_score
+        + 0.14 * finger_width_score
+        + 0.10 * palm_width_score
+        + 0.10 * histogram_score
+        + 0.07 * geometry_score
+        + 0.03 * texture_score
+        + 0.02 * hu_score
+    )
     live_quality = live_profile["palmprint"].get("quality", {})
     live_validation = live_quality.get("validation", {})
     quality_gate_passed = live_validation.get("valid", True) and live_quality.get("score", 0.0) >= config.MIN_CAPTURE_QUALITY
@@ -1106,11 +1315,18 @@ def _compare_legacy_profiles(live_profile: dict[str, Any], stored_profile: dict[
         "quality_gate_passed": quality_gate_passed,
         "quality_reason": live_validation.get("reason"),
         "components": {
+            "orb": round(contour_score, 4),
             "orientation": None,
             "geometry": round(geometry_score, 4),
+            "finger_lengths": round(finger_length_score, 4),
+            "finger_widths": round(finger_width_score, 4),
+            "palm_width": round(palm_width_score, 4),
+            "width_profile": round(width_profile_score, 4),
+            "contour": round(contour_score, 4),
             "histogram": round(histogram_score, 4),
             "texture_density": round(texture_score, 4),
             "alignment": round(hu_score, 4),
+            "hu": round(width_profile_score, 4),
         },
     }
 
@@ -1121,7 +1337,17 @@ def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, An
 
     live_geometry = live_profile["palmprint"]["geometry"]
     ref_geometry = stored_profile["palmprint"]["geometry"]
+    live_pattern = live_profile.get("hand_pattern", {})
+    ref_pattern = stored_profile.get("hand_pattern", {})
     orientation_score = _orientation_code_score(live_profile, stored_profile)
+    contour_score = _vector_score(live_pattern.get("contour_signature", []), ref_pattern.get("contour_signature", []))
+    width_profile_score = _vector_score(live_pattern.get("width_profile", []), ref_pattern.get("width_profile", []))
+    finger_length_score = _vector_score(live_pattern.get("finger_lengths", []), ref_pattern.get("finger_lengths", []))
+    finger_width_score = _vector_score(live_pattern.get("finger_widths", []), ref_pattern.get("finger_widths", []))
+    palm_width_score = _relative_score(
+        float(live_pattern.get("palm_width_ratio", 0.0)),
+        float(ref_pattern.get("palm_width_ratio", 0.0)),
+    )
 
     live_hist = np.array(live_profile["palmprint"]["orientation_histogram"], dtype=np.float32)
     ref_hist = np.array(stored_profile["palmprint"]["orientation_histogram"], dtype=np.float32)
@@ -1148,11 +1374,16 @@ def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, An
     )
 
     palm_score = float(
-        0.78 * orientation_score
-        + 0.14 * histogram_score
-        + 0.03 * geometry_score
-        + 0.04 * texture_score
+        0.28 * contour_score
+        + 0.20 * width_profile_score
+        + 0.18 * finger_length_score
+        + 0.14 * finger_width_score
+        + 0.08 * palm_width_score
+        + 0.05 * histogram_score
+        + 0.03 * texture_score
+        + 0.02 * geometry_score
         + 0.01 * alignment_score
+        + 0.01 * orientation_score
     )
 
     live_quality = live_profile["palmprint"].get("quality", {})
@@ -1169,9 +1400,16 @@ def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, An
         "components": {
             "orientation": round(orientation_score, 4),
             "geometry": round(geometry_score, 4),
+            "finger_lengths": round(finger_length_score, 4),
+            "finger_widths": round(finger_width_score, 4),
+            "palm_width": round(palm_width_score, 4),
+            "width_profile": round(width_profile_score, 4),
+            "contour": round(contour_score, 4),
+            "orb": round(contour_score, 4),
             "histogram": round(histogram_score, 4),
             "texture_density": round(texture_score, 4),
             "alignment": round(alignment_score, 4),
+            "hu": round(width_profile_score, 4),
         },
     }
 
@@ -1195,7 +1433,20 @@ def verify_live_profile(live_profile: dict[str, Any], stored_profile: dict[str, 
 
 
 def _average_components(results: list[dict[str, Any]]) -> dict[str, float | None]:
-    component_names = ("orientation", "geometry", "histogram", "texture_density", "alignment")
+    component_names = (
+        "orientation",
+        "geometry",
+        "finger_lengths",
+        "finger_widths",
+        "palm_width",
+        "width_profile",
+        "contour",
+        "orb",
+        "histogram",
+        "texture_density",
+        "alignment",
+        "hu",
+    )
     averaged = {}
     for name in component_names:
         values = [
