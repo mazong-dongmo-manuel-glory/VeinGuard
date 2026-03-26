@@ -18,6 +18,24 @@ import { COLORS, GRADIENTS } from '../theme';
 import { useMqttStore } from '../store/mqttStore';
 import { useEffect } from 'react';
 
+function StatCard({ label, value, color, icon }) {
+  return (
+    <BlurView intensity={12} tint="dark" style={[styles.statCard, { borderColor: `${color}30` }]}>
+      <Ionicons name={icon} size={18} color={color} style={styles.statIcon} />
+      <Text style={[styles.statValue, { color }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </BlurView>
+  );
+}
+
+function StatusTag({ status, color }) {
+  return (
+    <View style={[styles.statusTag, { borderColor: `${color}40`, backgroundColor: `${color}15` }]}>
+      <Text style={[styles.statusTagText, { color }]}>{status}</Text>
+    </View>
+  );
+}
+
 function EventItem({ item, onPress }) {
   const statusColor = item.status === 'GRANTED' ? COLORS.neonGreen : (item.status === 'DENIED' ? COLORS.neonRed : COLORS.neonAmber);
   const name = item.username || 'UNKNOWN OPERATIVE';

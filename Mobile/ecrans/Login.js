@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useMqttStore } from '../store/mqttStore';
+import { COLORS, GRADIENTS, SHADOWS } from '../theme';
 import { FIREBASE_ENABLED } from '../services/firebase';
 import { loginWithEmailPassword } from '../services/auth';
 
@@ -100,10 +101,6 @@ export default function Login({ navigation }) {
             <BlurView intensity={20} tint="dark" style={styles.glassCard}>
               <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>{t('login.accessSystem')}</Text>
-                <View style={styles.statusBadge}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.statusText}>{t('login.mqttBadge')}</Text>
-                </View>
               </View>
 
               {/* INPUT FIELDS */}
@@ -232,23 +229,11 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     marginBottom: 25,
   },
   cardTitle: { color: COLORS.white, fontSize: 18, fontWeight: '800' },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(57, 255, 20, 0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(57, 255, 20, 0.3)',
-  },
-  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.neonGreen, marginRight: 6 },
-  statusText: { color: COLORS.neonGreen, fontSize: 10, fontWeight: '700' },
 
   inputGroup: { marginBottom: 20 },
   label: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 10, marginLeft: 5 },

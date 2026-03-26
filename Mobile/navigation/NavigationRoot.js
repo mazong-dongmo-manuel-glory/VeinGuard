@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Text, View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import Login from '../ecrans/Login';
 import Dashboard from '../ecrans/Dashboard';
@@ -32,10 +33,14 @@ const COLORS = {
 };
 
 // ─── Icône onglet standard ─────────────────────────────────────────────────
-function TabIcon({ emoji, label, focused }) {
+function TabIcon({ name, focused }) {
   return (
     <View style={tabStyles.wrap}>
-      <Text style={[tabStyles.emoji, focused && tabStyles.emojiFocused]}>{emoji}</Text>
+      <Ionicons
+        name={name}
+        size={20}
+        color={focused ? COLORS.green : COLORS.textDim}
+      />
     </View>
   );
 }
@@ -45,7 +50,7 @@ function ScanButton({ onPress }) {
   return (
     <TouchableOpacity style={tabStyles.fabWrap} onPress={onPress} activeOpacity={0.85}>
       <View style={tabStyles.fab}>
-        <Text style={tabStyles.fabIcon}>〜</Text>
+        <Ionicons name="scan-outline" size={24} color={COLORS.green} />
       </View>
     </TouchableOpacity>
   );
@@ -53,8 +58,6 @@ function ScanButton({ onPress }) {
 
 const tabStyles = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'center' },
-  emoji: { fontSize: 20, opacity: 0.45 },
-  emojiFocused: { opacity: 1 },
 
   // FAB (Floating Action Button) central
   fabWrap: {
@@ -77,7 +80,6 @@ const tabStyles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 8,
   },
-  fabIcon: { fontSize: 24, color: COLORS.green },
 });
 
 // ─── Onglets principaux (4 items + 1 FAB central) ─────────────────────────
@@ -129,7 +131,7 @@ function MainTabs() {
         options={{
           tabBarLabel: 'ACCUEIL',
           tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="📊" focused={focused} />
+            <TabIcon name="home-outline" focused={focused} />
           ),
         }}
       />
@@ -141,7 +143,7 @@ function MainTabs() {
         options={{
           tabBarLabel: 'HISTORIQUE',
           tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="📋" focused={focused} />
+            <TabIcon name="time-outline" focused={focused} />
           ),
         }}
       />
@@ -164,7 +166,7 @@ function MainTabs() {
         options={{
           tabBarLabel: 'UTILISATEURS',
           tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="👥" focused={focused} />
+            <TabIcon name="people-outline" focused={focused} />
           ),
         }}
       />
@@ -176,7 +178,7 @@ function MainTabs() {
         options={{
           tabBarLabel: 'PARAMÈTRES',
           tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="⚙️" focused={focused} />
+            <TabIcon name="settings-outline" focused={focused} />
           ),
         }}
       />
