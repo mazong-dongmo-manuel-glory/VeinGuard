@@ -25,6 +25,21 @@
     "appRecoveredTitle": "Incident technique",
     "appRecoveredDesc": "Une erreur inattendue a été interceptée. L’application reste utilisable."
   },
+  "errors": {
+    "generic": "Une erreur inattendue s'est produite.",
+    "mqttTimeout": "La passerelle Raspberry Pi a mis trop de temps à répondre. Vérifiez la connexion MQTT et réessayez.",
+    "mqttNotConnected": "La connexion MQTT n'est pas établie. Vérifiez l'adresse du serveur, les ports et le réseau.",
+    "mqttClientUnavailable": "Le client MQTT mobile n'est pas disponible pour le moment.",
+    "invalidCapture": "Aucune main exploitable n'a été détectée. Repositionnez la main dans le cadre et réessayez.",
+    "profileNotFound": "Aucun profil biométrique correspondant n'a été trouvé pour cet utilisateur.",
+    "noMatchFound": "La main scannée ne correspond à aucun utilisateur enrôlé.",
+    "biometricMismatch": "La comparaison biométrique a échoué. Repositionnez la main puis relancez le scan.",
+    "userNotFound": "L'utilisateur demandé est introuvable.",
+    "missingUserId": "L'identifiant utilisateur est manquant pour cette opération.",
+    "enrollmentFailed": "L'enrôlement n'a pas pu être finalisé. Vérifiez la qualité des captures et réessayez.",
+    "userUpdateFailed": "La mise à jour de l'utilisateur a échoué.",
+    "userDeleteFailed": "La suppression de l'utilisateur a échoué."
+  },
   "navigation": {
     "home": "ACCUEIL",
     "history": "HISTORIQUE",

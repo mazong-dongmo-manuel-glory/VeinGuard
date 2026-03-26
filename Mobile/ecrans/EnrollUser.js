@@ -15,7 +15,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, GRADIENTS } from '../theme';
+import { getAppErrorMessage } from '../services/appErrors';
 import { useMqttStore } from '../store/mqttStore';
 
 const DEPARTMENT_KEYS = ['security', 'operations', 'research', 'it', 'administration'];
@@ -42,6 +44,7 @@ function StatusIndicator({ label, active }) {
 
 export default function EnrollUser({ navigation, route }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const params = route?.params || {};
   const mode = params.mode || 'create';
   const editingUser = params.user || null;
@@ -125,6 +128,10 @@ export default function EnrollUser({ navigation, route }) {
         ? await updateUser(payload)
         : await enrollUser(payload);
 
+      if (!response || response.status !== 'success') {
+        throw new Error(response?.error || response?.reason || t('enrollment.enrollmentErrorDesc'));
+      }
+
       const successTitle = mode === 'edit' ? t('enrollment.editSuccessTitle') : t('common.success');
       const successMessage = mode === 'edit'
         ? t('enrollment.editSuccessDesc')
@@ -132,7 +139,7 @@ export default function EnrollUser({ navigation, route }) {
 
       Alert.alert(successTitle, successMessage, [{ text: t('common.ok'), onPress: () => navigation.goBack() }]);
     } catch (err) {
-      Alert.alert(t('common.error'), err?.message || t('enrollment.enrollmentErrorDesc'));
+      Alert.alert(t('common.error'), getAppErrorMessage(t, err, 'enrollment.enrollmentErrorDesc'));
     } finally {
       setSubmitting(false);
     }
@@ -143,7 +150,7 @@ export default function EnrollUser({ navigation, route }) {
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={GRADIENTS.primary} style={StyleSheet.absoluteFill} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
         <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
@@ -321,7 +328,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },

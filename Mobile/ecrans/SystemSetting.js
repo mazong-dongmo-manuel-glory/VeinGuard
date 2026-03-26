@@ -12,9 +12,11 @@ import {
   Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, GRADIENTS } from '../theme';
+import { getAppErrorMessage } from '../services/appErrors';
 import { useMqttStore } from '../store/mqttStore';
 import { useAuthStore } from '../store/authStore';
 import { useLangueStore } from '../store/langueStore';
@@ -51,6 +53,7 @@ function TelemetryItem({ label, value, accent = COLORS.white }) {
 
 export default function SystemSetting({ navigation }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const isConnected = useMqttStore((state) => state.isConnected);
   const telemetry = useMqttStore((state) => state.telemetry);
   const updateSystemSettings = useMqttStore((state) => state.updateSystemSettings);
@@ -103,7 +106,7 @@ export default function SystemSetting({ navigation }) {
       await updateSystemSettings(payload);
       Alert.alert(t('common.success'), successMessage);
     } catch (error) {
-      Alert.alert(t('common.error'), error?.message || t('systemSettings.systemOfflineDesc'));
+      Alert.alert(t('common.error'), getAppErrorMessage(t, error, 'systemSettings.systemOfflineDesc'));
     }
   };
 
@@ -111,7 +114,7 @@ export default function SystemSetting({ navigation }) {
     try {
       await updatePreferences(patch);
     } catch (error) {
-      Alert.alert(t('common.error'), error?.message || t('systemSettings.preferencesError'));
+      Alert.alert(t('common.error'), getAppErrorMessage(t, error, 'systemSettings.preferencesError'));
     }
   };
 
@@ -129,7 +132,7 @@ export default function SystemSetting({ navigation }) {
       });
       Alert.alert(t('common.success'), t('systemSettings.connectionSaved'));
     } catch (error) {
-      Alert.alert(t('common.error'), error?.message || t('systemSettings.connectionError'));
+      Alert.alert(t('common.error'), getAppErrorMessage(t, error, 'systemSettings.connectionError'));
     }
   };
 
@@ -172,7 +175,7 @@ export default function SystemSetting({ navigation }) {
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={GRADIENTS.primary} style={StyleSheet.absoluteFill} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
         <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
@@ -411,7 +414,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },

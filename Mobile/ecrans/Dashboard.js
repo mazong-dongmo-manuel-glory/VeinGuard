@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -29,17 +30,22 @@ function SummaryItem({ label, value, accent = COLORS.white }) {
 
 export default function Dashboard({ navigation }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [time, setTime] = useState(new Date());
   const isCompact = width < 390;
   
   const systemStatus = useMqttStore((state) => state.status);
   const isConnected = useMqttStore((state) => state.isConnected);
+  const gatewayOnline = useMqttStore((state) => state.gatewayOnline);
   const telemetry = useMqttStore((state) => state.telemetry);
   const statusPayload = useMqttStore((state) => state.statusPayload);
   const logout = useAuthStore((state) => state.logout);
+  const isGatewayAvailable = gatewayOnline || isConnected;
   const systemStatusLabel =
-    systemStatus === 'ONLINE'
+    isGatewayAvailable
+      ? t('dashboard.onlineStatus')
+      : systemStatus === 'ONLINE'
       ? t('dashboard.onlineStatus')
       : systemStatus === 'OFFLINE'
         ? t('dashboard.offlineStatus')
@@ -91,7 +97,7 @@ export default function Dashboard({ navigation }) {
       <LinearGradient colors={GRADIENTS.primary} style={StyleSheet.absoluteFill} />
 
       {/* Header */}
-      <BlurView intensity={30} tint="dark" style={styles.header}>
+      <BlurView intensity={30} tint="dark" style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
         <View style={styles.headerLeft}>
           <Text style={styles.headerTime}>{formatTime(time)}</Text>
           <View style={styles.vDivider} />
@@ -114,15 +120,15 @@ export default function Dashboard({ navigation }) {
             <Text style={styles.greeting}>{t('dashboard.title')}</Text>
             <Text style={styles.subtitle}>{t('dashboard.subtitle')}</Text>
           </View>
-          <View style={[styles.systemBadge, { backgroundColor: isConnected ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 61, 90, 0.1)', borderColor: isConnected ? 'rgba(57, 255, 20, 0.3)' : 'rgba(255, 61, 90, 0.3)' }]}>
-            <Text style={[styles.systemBadgeText, { color: isConnected ? COLORS.neonGreen : COLORS.neonRed }]}>{systemStatusLabel}</Text>
+          <View style={[styles.systemBadge, { backgroundColor: isGatewayAvailable ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 61, 90, 0.1)', borderColor: isGatewayAvailable ? 'rgba(57, 255, 20, 0.3)' : 'rgba(255, 61, 90, 0.3)' }]}>
+            <Text style={[styles.systemBadgeText, { color: isGatewayAvailable ? COLORS.neonGreen : COLORS.neonRed }]}>{systemStatusLabel}</Text>
           </View>
         </View>
 
         {/* Security Alert Banner */}
-        <View style={[styles.alertBanner, { borderColor: isConnected ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 61, 90, 0.1)' }]}>
-          <Ionicons name={isConnected ? "shield-checkmark" : "warning"} size={20} color={isConnected ? COLORS.neonGreen : COLORS.neonRed} />
-          <Text style={styles.alertText}>{isConnected ? t('dashboard.alertSecure') : t('dashboard.alertOffline')}</Text>
+        <View style={[styles.alertBanner, { borderColor: isGatewayAvailable ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 61, 90, 0.1)' }]}>
+          <Ionicons name={isGatewayAvailable ? "shield-checkmark" : "warning"} size={20} color={isGatewayAvailable ? COLORS.neonGreen : COLORS.neonRed} />
+          <Text style={styles.alertText}>{isGatewayAvailable ? t('dashboard.alertSecure') : t('dashboard.alertOffline')}</Text>
         </View>
 
         {/* Main Actions - Grid */}
@@ -178,7 +184,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 15,
     paddingHorizontal: 20,
     borderBottomWidth: 1,

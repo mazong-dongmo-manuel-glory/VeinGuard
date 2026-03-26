@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -17,8 +18,8 @@ import { COLORS, GRADIENTS } from '../theme';
 
 const { width } = Dimensions.get('window');
 
-const Header = ({ navigation, t }) => (
-  <View style={styles.header}>
+const Header = ({ navigation, t, topInset }) => (
+  <View style={[styles.header, { paddingTop: Math.max(topInset + 8, 20) }]}>
     <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
       <Ionicons name="chevron-back" size={24} color={COLORS.white} />
     </TouchableOpacity>
@@ -103,6 +104,7 @@ const ConfidenceMeter = ({ value, t }) => (
 
 export default function AccessDecision({ navigation, route }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [audioOn, setAudioOn] = useState(true);
   const isCompact = width < 390;
   const event = route?.params?.event || {};
@@ -121,7 +123,7 @@ export default function AccessDecision({ navigation, route }) {
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={GRADIENTS.primary} style={StyleSheet.absoluteFill} />
 
-      <Header navigation={navigation} t={t} />
+        <Header navigation={navigation} t={t} topInset={insets.top} />
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.statusSection}>
@@ -188,7 +190,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },

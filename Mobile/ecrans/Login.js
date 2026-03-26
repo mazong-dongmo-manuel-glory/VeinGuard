@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { COLORS, GRADIENTS, SHADOWS } from '../theme';
 import { getFirebaseAuthErrorMessage, requestPasswordReset } from '../services/auth';
+import { getAppErrorMessage } from '../services/appErrors';
 import { useAuthStore } from '../store/authStore';
 import { useMqttStore } from '../store/mqttStore';
 
@@ -36,8 +37,10 @@ export default function Login({ navigation }) {
   const login = useAuthStore((state) => state.login);
   const signup = useAuthStore((state) => state.signup);
   const isConnected = useMqttStore((state) => state.isConnected);
+  const gatewayOnline = useMqttStore((state) => state.gatewayOnline);
   const brokerConfig = useMqttStore((state) => state.brokerConfig);
   const updateBrokerConfig = useMqttStore((state) => state.updateBrokerConfig);
+  const serverOnline = gatewayOnline || isConnected;
 
   useEffect(() => {
     setServerHost(brokerConfig.host || '');
@@ -77,7 +80,6 @@ export default function Login({ navigation }) {
         isSignupMode ? t('login.signupFailed') : t('login.loginFailed'),
         getFirebaseAuthErrorMessage(error),
       );
-      console.error(error);
     }
   };
 
@@ -104,7 +106,7 @@ export default function Login({ navigation }) {
       });
       Alert.alert(t('common.success'), t('login.serverConfigSaved'));
     } catch (error) {
-      Alert.alert(t('common.error'), error?.message || t('login.serverConfigError'));
+      Alert.alert(t('common.error'), getAppErrorMessage(t, error, 'login.serverConfigError'));
     }
   };
 
@@ -220,8 +222,8 @@ export default function Login({ navigation }) {
               <View style={styles.serverCard}>
                 <View style={styles.serverHeader}>
                   <Text style={styles.serverTitle}>{t('login.serverConfigTitle')}</Text>
-                  <Text style={[styles.serverStatus, { color: isConnected ? COLORS.neonGreen : COLORS.neonRed }]}>
-                    {isConnected ? t('common.online') : t('common.offline')}
+                  <Text style={[styles.serverStatus, { color: serverOnline ? COLORS.neonGreen : COLORS.neonRed }]}>
+                    {serverOnline ? t('common.online') : t('common.offline')}
                   </Text>
                 </View>
 

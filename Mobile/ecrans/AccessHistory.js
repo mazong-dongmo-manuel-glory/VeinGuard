@@ -14,7 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, GRADIENTS } from '../theme';
+import { getAppErrorMessage } from '../services/appErrors';
 import { useMqttStore } from '../store/mqttStore';
 import { useAuthStore } from '../store/authStore';
 
@@ -79,11 +81,14 @@ function EventItem({ item, onPress, compact, showTechnicalDetails }) {
 
 export default function AccessHistory({ navigation }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [logList, setLogList] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   const isConnected = useMqttStore((state) => state.isConnected);
+  const gatewayOnline = useMqttStore((state) => state.gatewayOnline);
   const fetchLogs = useMqttStore((state) => state.fetchLogs);
   const preferences = useAuthStore((state) => state.preferences);
   const autoRefreshData = Boolean(preferences?.autoRefreshData);
@@ -93,20 +98,23 @@ export default function AccessHistory({ navigation }) {
   const loadLogs = useCallback(async () => {
     if (!isConnected) {
       setLogList([]);
+      setLoadError(t('userManagement.gatewayDisconnected'));
       return;
     }
 
     try {
       const list = await fetchLogs();
       setLogList(Array.isArray(list) ? list : []);
+      setLoadError(null);
     } catch (err) {
-      console.error('Failed to fetch logs:', err);
+      setLogList([]);
+      setLoadError(getAppErrorMessage(t, err, 'userManagement.gatewayDisconnected'));
     }
-  }, [isConnected, fetchLogs]);
+  }, [isConnected, fetchLogs, t]);
 
   useFocusEffect(
     useCallback(() => {
-      loadLogs();
+      void loadLogs();
     }, [loadLogs]),
   );
 
@@ -116,7 +124,7 @@ export default function AccessHistory({ navigation }) {
     }
 
     const interval = setInterval(() => {
-      loadLogs();
+      void loadLogs();
     }, 10000);
 
     return () => clearInterval(interval);
@@ -124,8 +132,11 @@ export default function AccessHistory({ navigation }) {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadLogs();
-    setRefreshing(false);
+    try {
+      await loadLogs();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const filteredLogs = logList.filter((log) =>
@@ -137,7 +148,7 @@ export default function AccessHistory({ navigation }) {
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={GRADIENTS.primary} style={StyleSheet.absoluteFill} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
         <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
@@ -187,7 +198,11 @@ export default function AccessHistory({ navigation }) {
             </View>
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.emptyText}>{t('accessHistory.noEvents')}</Text>}
+        ListEmptyComponent={(
+          <Text style={styles.emptyText}>
+            {loadError || ((gatewayOnline || isConnected) ? t('accessHistory.noEvents') : t('userManagement.gatewayDisconnected'))}
+          </Text>
+        )}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -202,7 +217,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },

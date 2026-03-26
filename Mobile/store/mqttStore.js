@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import mqtt from 'mqtt';
 import {
   deleteUserProfile,
+  loadUserProfiles,
   syncAccessEvent,
   syncBiometricProfile,
   syncTelemetry,
@@ -20,6 +21,8 @@ import {
 } from '../config';
 
 const MQTT_CONFIG_KEY = 'mqtt_connection_config';
+const GATEWAY_SIGNAL_TTL_MS = 20000;
+let gatewaySignalTimer = null;
 
 const getDefaultBrokerConfig = () => ({
   host: MQTT_DEFAULT_HOST,
@@ -43,9 +46,44 @@ const normalizeBrokerConfig = (value = {}) => ({
   password: String(value.password ?? MQTT_DEFAULT_PASSWORD),
 });
 
+const ensureSuccessfulResponse = (response, fallbackMessage) => {
+  if (response?.status === 'success' || Array.isArray(response)) {
+    return response;
+  }
+
+  const errorMessage = response?.error || response?.reason || fallbackMessage;
+  throw new Error(errorMessage);
+};
+
+const hasFreshGatewaySignal = (state) =>
+  Boolean(state.lastGatewaySeenAt && Date.now() - state.lastGatewaySeenAt <= GATEWAY_SIGNAL_TTL_MS);
+
+const refreshGatewaySignal = (set, get, patch = {}) => {
+  const nextTimestamp = Date.now();
+  set({
+    ...patch,
+    gatewayOnline: true,
+    lastGatewaySeenAt: nextTimestamp,
+  });
+
+  if (gatewaySignalTimer) {
+    clearTimeout(gatewaySignalTimer);
+  }
+
+  gatewaySignalTimer = setTimeout(() => {
+    const state = get();
+    if (state.isConnected || hasFreshGatewaySignal(state)) {
+      return;
+    }
+    set({ gatewayOnline: false, status: 'OFFLINE' });
+  }, GATEWAY_SIGNAL_TTL_MS + 500);
+};
+
 export const useMqttStore = create((set, get) => ({
   client: null,
   isConnected: false,
+  gatewayOnline: false,
+  lastGatewaySeenAt: null,
   status: 'OFFLINE',
   statusPayload: null,
   telemetry: null,
@@ -79,7 +117,11 @@ export const useMqttStore = create((set, get) => ({
         client.end(true);
       } catch {}
     }
-    set({ client: null, isConnected: false, status: 'OFFLINE' });
+    if (gatewaySignalTimer) {
+      clearTimeout(gatewaySignalTimer);
+      gatewaySignalTimer = null;
+    }
+    set({ client: null, isConnected: false, gatewayOnline: false, status: 'OFFLINE' });
   },
 
   updateBrokerConfig: async (partialConfig, reconnect = true) => {
@@ -130,7 +172,7 @@ export const useMqttStore = create((set, get) => ({
 
     client.on('connect', () => {
       try {
-        set({ isConnected: true, status: 'ONLINE', lastError: null });
+        refreshGatewaySignal(set, get, { isConnected: true, status: 'ONLINE', lastError: null });
         client.subscribe(responseTopic('auth/login', get().clientId));
         client.subscribe(responseTopic('users/list', get().clientId));
         client.subscribe(responseTopic('users/update', get().clientId));
@@ -151,12 +193,12 @@ export const useMqttStore = create((set, get) => ({
       try {
         const data = JSON.parse(payload.toString());
         if (topicName === MQTT_TOPICS.status) {
-          set({ status: data.status || 'ONLINE', statusPayload: data });
+          refreshGatewaySignal(set, get, { status: data.status || 'ONLINE', statusPayload: data });
           return;
         }
 
         if (topicName === MQTT_TOPICS.telemetry) {
-          set({ telemetry: data });
+          refreshGatewaySignal(set, get, { telemetry: data });
           const sanitizedCamera = data.camera
             ? Object.fromEntries(
                 Object.entries(data.camera).filter(([key]) => key !== 'preview_jpeg_base64'),
@@ -170,11 +212,14 @@ export const useMqttStore = create((set, get) => ({
         }
 
         if (topicName === responseTopic('settings/update', get().clientId)) {
-          set({ settingsAck: data, telemetry: data.telemetry || get().telemetry });
+          refreshGatewaySignal(set, get, {
+            settingsAck: data,
+            telemetry: data.telemetry || get().telemetry,
+          });
         }
       } catch (error) {
         if (topicName === MQTT_TOPICS.status) {
-          set({ status: 'ONLINE' });
+          refreshGatewaySignal(set, get, { status: 'ONLINE' });
           return;
         }
         set({ lastError: error?.message || 'MQTT message error' });
@@ -182,10 +227,25 @@ export const useMqttStore = create((set, get) => ({
     });
 
     client.on('close', () => {
-      set({ isConnected: false, status: 'OFFLINE', statusPayload: null, client: null });
+      set((state) => {
+        const gatewayOnline = hasFreshGatewaySignal(state);
+        return {
+          isConnected: false,
+          gatewayOnline,
+          status: gatewayOnline ? state.status : 'OFFLINE',
+        };
+      });
     });
     client.on('error', (error) => {
-      set({ isConnected: false, status: 'ERROR', lastError: error?.message || 'MQTT error' });
+      set((state) => {
+        const gatewayOnline = hasFreshGatewaySignal(state);
+        return {
+          isConnected: false,
+          gatewayOnline,
+          status: gatewayOnline ? state.status : 'ERROR',
+          lastError: error?.message || 'MQTT error',
+        };
+      });
     });
 
     set({ client });
@@ -267,20 +327,28 @@ export const useMqttStore = create((set, get) => ({
       MQTT_TOPICS.usersCmd,
       responseTopic('users/list', get().clientId),
       {}
-    ),
+    ).catch(async () => {
+      const fallbackUsers = await loadUserProfiles().catch(() => []);
+      if (Array.isArray(fallbackUsers) && fallbackUsers.length > 0) {
+        return fallbackUsers;
+      }
+      throw new Error(get().lastError || 'MQTT not connected');
+    }),
 
   fetchLogs: async () =>
     get().request(
       MQTT_TOPICS.logsCmd,
       responseTopic('access/logs', get().clientId),
-      {}
+      {},
+      12000
     ),
 
   fetchAuditLogs: async () =>
     get().request(
       MQTT_TOPICS.auditCmd,
       responseTopic('audit/list', get().clientId),
-      {}
+      {},
+      12000
     ),
 
   enrollUser: async (payload) =>
@@ -288,8 +356,12 @@ export const useMqttStore = create((set, get) => ({
       MQTT_TOPICS.enrollCmd,
       responseTopic('users/enroll', get().clientId),
       payload,
-      30000
+      90000
     ).then(async (response) => {
+      ensureSuccessfulResponse(response, 'Enrollment failed');
+      if (response?.telemetry) {
+        set({ telemetry: response.telemetry });
+      }
       if (response?.status === 'success') {
         await syncUserProfile(response.user_id, {
           user_id: response.user_id,
@@ -316,6 +388,7 @@ export const useMqttStore = create((set, get) => ({
       responseTopic('users/update', get().clientId),
       payload
     ).then(async (response) => {
+      ensureSuccessfulResponse(response, 'User update failed');
       if (response?.status === 'success' && response.user) {
         await syncUserProfile(response.user.id, response.user).catch(() => {});
       }
@@ -328,6 +401,7 @@ export const useMqttStore = create((set, get) => ({
       responseTopic('users/delete', get().clientId),
       { user_id: userId }
     ).then(async (response) => {
+      ensureSuccessfulResponse(response, 'User deletion failed');
       if (response?.status === 'success') {
         await deleteUserProfile(userId).catch(() => {});
       }
@@ -342,7 +416,10 @@ export const useMqttStore = create((set, get) => ({
       12000
     ).then(async (response) => {
       if (response?.event?.id) {
-        set({ lastScanResult: response });
+        set({
+          lastScanResult: response,
+          telemetry: response?.event?.modalities?.telemetry || get().telemetry,
+        });
         await syncAccessEvent(response.event.id, response.event).catch(() => {});
       }
       return response;

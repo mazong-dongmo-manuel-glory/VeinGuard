@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import {
   View,
@@ -65,6 +66,7 @@ function CodeBlock({ title, topic, payload }) {
 
 export default function AccessEvent({ navigation, route }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const event = route?.params?.event;
   const eventId = event?.id || 'EVT-8743';
   const eventName = event?.username || event?.name || t('common.unknownUser');
@@ -103,7 +105,7 @@ export default function AccessEvent({ navigation, route }) {
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={GRADIENTS.primary} style={StyleSheet.absoluteFill} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
         <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
@@ -198,7 +200,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },

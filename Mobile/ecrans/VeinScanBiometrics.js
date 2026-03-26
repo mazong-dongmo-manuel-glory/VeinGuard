@@ -17,7 +17,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, GRADIENTS } from '../theme';
+import { getAppErrorMessage } from '../services/appErrors';
 import { useMqttStore } from '../store/mqttStore';
 import { MQTT_TOPICS } from '../config';
 
@@ -58,6 +60,7 @@ function QualityBar({ label, value, color }) {
 
 export default function VeinScanBiometrics({ navigation }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [userId, setUserId] = useState('');
   const [scanning, setScanning] = useState(false);
@@ -65,11 +68,13 @@ export default function VeinScanBiometrics({ navigation }) {
   const isCompact = width < 390;
 
   const isConnected = useMqttStore((state) => state.isConnected);
+  const gatewayOnline = useMqttStore((state) => state.gatewayOnline);
   const triggerScan = useMqttStore((state) => state.triggerScan);
   const telemetry = useMqttStore((state) => state.telemetry);
   const lastScanResult = useMqttStore((state) => state.lastScanResult);
   const previewBase64 = telemetry?.camera?.preview_jpeg_base64;
   const previewUri = previewBase64 ? `data:image/jpeg;base64,${previewBase64}` : null;
+  const serverAvailable = gatewayOnline || isConnected;
 
   const geometryQuality = Math.max(0, Math.min(100, Math.round((1 - (lastScanResult?.components?.geometry || 0)) * 100)));
   const orbQuality = Math.max(0, Math.min(100, Math.round((1 - (lastScanResult?.components?.orb || 0)) * 100)));
@@ -101,11 +106,11 @@ export default function VeinScanBiometrics({ navigation }) {
           if (response?.status === 'success') {
             navigation?.navigate('AccessDecision', { event: response.event });
           } else {
-            Alert.alert(t('veinScan.scanErrorTitle'), response?.reason || t('veinScan.scanErrorDesc'));
+            Alert.alert(t('veinScan.scanErrorTitle'), getAppErrorMessage(t, response?.reason, 'veinScan.scanErrorDesc'));
           }
-        } catch {
+        } catch (error) {
           setScanning(false);
-          Alert.alert(t('veinScan.scanErrorTitle'), t('veinScan.scanErrorDesc'));
+          Alert.alert(t('veinScan.scanErrorTitle'), getAppErrorMessage(t, error, 'veinScan.scanErrorDesc'));
           return;
         }
         setScanning(false);
@@ -119,14 +124,14 @@ export default function VeinScanBiometrics({ navigation }) {
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={GRADIENTS.primary} style={StyleSheet.absoluteFill} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
         <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('veinScan.title')}</Text>
-        <TouchableOpacity style={[styles.statusBadge, { backgroundColor: isConnected ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 61, 90, 0.1)' }]}>
-          <View style={[styles.statusDot, { backgroundColor: isConnected ? COLORS.neonGreen : COLORS.neonRed }]} />
-          <Text style={[styles.statusText, { color: isConnected ? COLORS.neonGreen : COLORS.neonRed }]}>{isConnected ? t('veinScan.activeStatus') : t('common.offline')}</Text>
+        <TouchableOpacity style={[styles.statusBadge, { backgroundColor: serverAvailable ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 61, 90, 0.1)' }]}>
+          <View style={[styles.statusDot, { backgroundColor: serverAvailable ? COLORS.neonGreen : COLORS.neonRed }]} />
+          <Text style={[styles.statusText, { color: serverAvailable ? COLORS.neonGreen : COLORS.neonRed }]}>{serverAvailable ? t('veinScan.activeStatus') : t('common.offline')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -260,7 +265,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },

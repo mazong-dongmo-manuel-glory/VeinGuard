@@ -15,7 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, GRADIENTS } from '../theme';
+import { getAppErrorMessage } from '../services/appErrors';
 import { useMqttStore } from '../store/mqttStore';
 import { useAuthStore } from '../store/authStore';
 
@@ -101,6 +103,7 @@ function UserCard({ user, onEdit, onDelete, compact, showTechnicalDetails }) {
 
 export default function UserManagement({ navigation }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [usersList, setUsersList] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -109,27 +112,22 @@ export default function UserManagement({ navigation }) {
   const fetchUsers = useMqttStore((state) => state.fetchUsers);
   const deleteUser = useMqttStore((state) => state.deleteUser);
   const isConnected = useMqttStore((state) => state.isConnected);
+  const gatewayOnline = useMqttStore((state) => state.gatewayOnline);
   const preferences = useAuthStore((state) => state.preferences);
   const autoRefreshData = Boolean(preferences?.autoRefreshData);
   const compactLists = Boolean(preferences?.compactLists);
   const showTechnicalDetails = Boolean(preferences?.showTechnicalDetails);
 
   const loadUsers = useCallback(async () => {
-    if (!isConnected) {
-      setUsersList([]);
-      setLoadError(t('userManagement.gatewayDisconnected'));
-      return;
-    }
-
     try {
       const list = await fetchUsers();
       setUsersList(Array.isArray(list) ? list : []);
       setLoadError(null);
     } catch (err) {
       setUsersList([]);
-      setLoadError(err?.message || t('userManagement.gatewayDisconnected'));
+      setLoadError(getAppErrorMessage(t, err, 'userManagement.gatewayDisconnected'));
     }
-  }, [isConnected, fetchUsers, t]);
+  }, [fetchUsers, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -138,7 +136,7 @@ export default function UserManagement({ navigation }) {
   );
 
   useEffect(() => {
-    if (!autoRefreshData || !isConnected) {
+    if (!autoRefreshData) {
       return undefined;
     }
 
@@ -147,7 +145,7 @@ export default function UserManagement({ navigation }) {
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [autoRefreshData, isConnected, loadUsers]);
+  }, [autoRefreshData, loadUsers]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -172,7 +170,7 @@ export default function UserManagement({ navigation }) {
               await deleteUser(user.id);
               await loadUsers();
             } catch (error) {
-              Alert.alert(t('common.error'), error?.message || t('userManagement.deleteErrorDesc'));
+              Alert.alert(t('common.error'), getAppErrorMessage(t, error, 'userManagement.deleteErrorDesc'));
             }
           },
         },
@@ -190,7 +188,7 @@ export default function UserManagement({ navigation }) {
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={GRADIENTS.primary} style={StyleSheet.absoluteFill} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
         <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
@@ -244,7 +242,7 @@ export default function UserManagement({ navigation }) {
         )}
         ListEmptyComponent={(
           <Text style={styles.emptyText}>
-            {loadError || (isConnected ? t('accessHistory.noEvents') : t('userManagement.gatewayDisconnected'))}
+            {loadError || ((gatewayOnline || isConnected) ? t('accessHistory.noEvents') : t('userManagement.gatewayDisconnected'))}
           </Text>
         )}
         contentContainerStyle={styles.scrollContent}
@@ -261,7 +259,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },

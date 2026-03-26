@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View, Text } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import NavigationRoot from "./navigation/NavigationRoot";
 import initI18next from "./i18n";
 import { useLangueStore } from "./store/langueStore";
@@ -69,10 +70,12 @@ export default function App() {
 
   return (
     <AppErrorBoundary>
-      <View style={styles.container}>
-        <NavigationRoot />
-        <StatusBar style="auto" />
-      </View>
+      <SafeAreaProvider>
+        <View style={styles.container}>
+          <NavigationRoot />
+          <StatusBar style="light" />
+        </View>
+      </SafeAreaProvider>
     </AppErrorBoundary>
   );
 }

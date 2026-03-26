@@ -14,7 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, GRADIENTS } from '../theme';
+import { getAppErrorMessage } from '../services/appErrors';
 import { useMqttStore } from '../store/mqttStore';
 import { useAuthStore } from '../store/authStore';
 
@@ -78,11 +80,14 @@ function LogItem({ item, compact, showTechnicalDetails }) {
 
 export default function AdminAuditLogs({ navigation }) {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState('ALL');
   const [auditList, setAuditList] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   const isConnected = useMqttStore((state) => state.isConnected);
+  const gatewayOnline = useMqttStore((state) => state.gatewayOnline);
   const fetchAuditLogs = useMqttStore((state) => state.fetchAuditLogs);
   const preferences = useAuthStore((state) => state.preferences);
   const autoRefreshData = Boolean(preferences?.autoRefreshData);
@@ -92,20 +97,23 @@ export default function AdminAuditLogs({ navigation }) {
   const loadAudit = useCallback(async () => {
     if (!isConnected) {
       setAuditList([]);
+      setLoadError(t('userManagement.gatewayDisconnected'));
       return;
     }
 
     try {
       const list = await fetchAuditLogs();
       setAuditList(Array.isArray(list) ? list : []);
+      setLoadError(null);
     } catch (err) {
-      console.error('Failed to fetch audit logs:', err);
+      setAuditList([]);
+      setLoadError(getAppErrorMessage(t, err, 'userManagement.gatewayDisconnected'));
     }
-  }, [fetchAuditLogs, isConnected]);
+  }, [fetchAuditLogs, isConnected, t]);
 
   useFocusEffect(
     useCallback(() => {
-      loadAudit();
+      void loadAudit();
     }, [loadAudit]),
   );
 
@@ -115,7 +123,7 @@ export default function AdminAuditLogs({ navigation }) {
     }
 
     const interval = setInterval(() => {
-      loadAudit();
+      void loadAudit();
     }, 12000);
 
     return () => clearInterval(interval);
@@ -123,8 +131,11 @@ export default function AdminAuditLogs({ navigation }) {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadAudit();
-    setRefreshing(false);
+    try {
+      await loadAudit();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const filteredLogs = useMemo(
@@ -139,7 +150,7 @@ export default function AdminAuditLogs({ navigation }) {
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={GRADIENTS.primary} style={StyleSheet.absoluteFill} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
         <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
@@ -201,7 +212,7 @@ export default function AdminAuditLogs({ navigation }) {
         )}
         ListEmptyComponent={(
           <Text style={styles.emptyText}>
-            {isConnected ? t('auditLogs.noEvents') : t('userManagement.gatewayDisconnected')}
+            {loadError || ((gatewayOnline || isConnected) ? t('auditLogs.noEvents') : t('userManagement.gatewayDisconnected'))}
           </Text>
         )}
         ListFooterComponent={(
@@ -226,7 +237,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },
