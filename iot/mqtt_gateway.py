@@ -99,6 +99,7 @@ class BioGuardMQTTGateway:
         client_id = data.get("client_id", "anonymous")
         response_topic = config.response_topic("access/scan", client_id)
         user_id = data.get("user_id")
+        best_candidate_info = None
 
         try:
             self.controller.handle_scanning()
@@ -172,6 +173,11 @@ class BioGuardMQTTGateway:
                 stored_profile = database.get_biometric_profile(user_id) or self.firebase.get_biometric_profile(user_id)
                 if stored_profile:
                     result = verify_identification_profile(live_identification_profile, stored_profile)
+                    best_candidate_info = {
+                        "user_id": user_id,
+                        "username": data.get("username") or user_id,
+                        "score": result["score"],
+                    }
                     matched_user = {
                         "user_id": user_id,
                         "username": data.get("username") or user_id,
@@ -185,6 +191,12 @@ class BioGuardMQTTGateway:
                     result = verify_identification_profile(live_identification_profile, candidate["profile"])
                     if best_candidate is None or result["score"] < best_candidate["result"]["score"]:
                         best_candidate = {"candidate": candidate, "result": result}
+                if best_candidate:
+                    best_candidate_info = {
+                        "user_id": best_candidate["candidate"]["user_id"],
+                        "username": best_candidate["candidate"]["username"],
+                        "score": best_candidate["result"]["score"],
+                    }
                 if best_candidate and best_candidate["result"]["match"]:
                     matched_user = {
                         "user_id": best_candidate["candidate"]["user_id"],
@@ -205,9 +217,19 @@ class BioGuardMQTTGateway:
                     modalities={
                         "telemetry": last_capture["telemetry"] if last_capture else None,
                         "captured_frame_count": len(scan_frames),
+                        "best_candidate": best_candidate_info,
                     },
                 )
-                self.client.publish(response_topic, json.dumps({"status": "fail", "reason": "PROFILE_NOT_FOUND" if user_id else "NO_MATCH_FOUND"}))
+                self.client.publish(
+                    response_topic,
+                    json.dumps(
+                        {
+                            "status": "fail",
+                            "reason": "PROFILE_NOT_FOUND" if user_id else "NO_MATCH_FOUND",
+                            "best_candidate": best_candidate_info,
+                        }
+                    ),
+                )
                 return
 
             result = matched_user.get("prefetched_result") or verify_identification_profile(
@@ -241,6 +263,7 @@ class BioGuardMQTTGateway:
                     "valid_sample_count": result.get("valid_sample_count"),
                     "rejected_samples": result.get("rejected_samples"),
                     "fusion": result.get("fusion"),
+                    "best_candidate": best_candidate_info,
                 },
             )
 
@@ -256,6 +279,7 @@ class BioGuardMQTTGateway:
                 "quality_reason": result.get("quality_reason"),
                 "quality": result["live_profile"]["palmprint"].get("quality"),
                 "components": result["components"],
+                "best_candidate": best_candidate_info,
                 "event": event,
             }
             self.client.publish(response_topic, json.dumps(response))

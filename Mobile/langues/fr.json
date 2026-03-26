@@ -534,6 +534,8 @@
     "scanErrorTitle": "Erreur",
     "scanErrorDesc": "Le scan biométrique n'a pas pu être lancé.",
     "identificationFailedDesc": "Identification échouée, réessayez.",
+    "bestMatchLine": "Correspondance la plus proche : {{username}} | score : {{score}}",
+    "bestMatchUnknown": "Utilisateur inconnu",
     "scanStartedTitle": "Scan lancé",
     "scanStartedDesc": "Place la paume et aligne bien les doigts sur le dispositif.",
     "dropdownLabel": "Scan de la main (HUD biométrique)"

@@ -58,6 +58,23 @@ function QualityBar({ label, value, color }) {
   );
 }
 
+function buildFailureMessage(t, response) {
+  const bestCandidate = response?.best_candidate;
+  if (!bestCandidate?.score && bestCandidate?.score !== 0) {
+    return t('veinScan.identificationFailedDesc');
+  }
+
+  const username = bestCandidate?.username || bestCandidate?.user_id || t('veinScan.bestMatchUnknown');
+  return [
+    t('veinScan.identificationFailedDesc'),
+    '',
+    t('veinScan.bestMatchLine', {
+      username,
+      score: Number(bestCandidate.score).toFixed(3),
+    }),
+  ].join('\n');
+}
+
 export default function VeinScanBiometrics({ navigation }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -117,11 +134,11 @@ export default function VeinScanBiometrics({ navigation }) {
         setScanning(true);
         try {
           const response = await triggerScan(userId.trim() || undefined);
-          if (response?.status === 'success') {
+          if (response?.status === 'success' && response?.result === 'GRANTED') {
             navigation?.navigate('AccessDecision', { event: response.event });
           } else {
             startCameraPreview('scan').catch(() => {});
-            Alert.alert(t('veinScan.scanErrorTitle'), t('veinScan.identificationFailedDesc'));
+            Alert.alert(t('veinScan.scanErrorTitle'), buildFailureMessage(t, response));
           }
         } catch (error) {
           startCameraPreview('scan').catch(() => {});

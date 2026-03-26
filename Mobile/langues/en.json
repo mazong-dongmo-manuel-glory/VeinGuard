@@ -496,6 +496,13 @@
     "testAccess": "TEST ACCESS",
     "privacyTitle": "Privacy Notice",
     "privacyText": "Hand biometric data is processed on the Raspberry Pi and securely synchronized to Firebase for history and administration. Raw images are not used as the primary long-term authentication source.",
+    "offlineTitle": "System offline",
+    "offlineDesc": "Unable to reach the Raspberry Pi gateway.",
+    "scanErrorTitle": "Error",
+    "scanErrorDesc": "The biometric scan could not be started.",
+    "identificationFailedDesc": "Identification failed, please try again.",
+    "bestMatchLine": "Closest match: {{username}} | score: {{score}}",
+    "bestMatchUnknown": "Unknown user",
     "dropdownLabel": "Hand scan (biometric HUD)"
   }
 }
