@@ -52,6 +52,8 @@ Le mobile peut :
 - `bioguard/cmd/auth/login`
 - `bioguard/cmd/users/list`
 - `bioguard/cmd/users/enroll`
+- `bioguard/cmd/users/update`
+- `bioguard/cmd/users/delete`
 - `bioguard/cmd/access/scan`
 - `bioguard/cmd/access/logs`
 - `bioguard/cmd/audit/list`

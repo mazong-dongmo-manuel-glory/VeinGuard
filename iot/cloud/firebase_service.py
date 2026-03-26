@@ -51,10 +51,22 @@ class FirebaseService:
         self.db.collection(config.FIREBASE_USERS_COLLECTION).document(user_id).set(payload, merge=True)
         return True
 
+    def delete_user_profile(self, user_id: str) -> bool:
+        if not self.enabled:
+            return False
+        self.db.collection(config.FIREBASE_USERS_COLLECTION).document(user_id).delete()
+        return True
+
     def save_biometric_profile(self, user_id: str, payload: dict) -> bool:
         if not self.enabled:
             return False
         self.db.collection(config.FIREBASE_BIOMETRICS_COLLECTION).document(user_id).set(payload, merge=True)
+        return True
+
+    def delete_biometric_profile(self, user_id: str) -> bool:
+        if not self.enabled:
+            return False
+        self.db.collection(config.FIREBASE_BIOMETRICS_COLLECTION).document(user_id).delete()
         return True
 
     def get_biometric_profile(self, user_id: str) -> dict | None:
@@ -74,4 +86,3 @@ class FirebaseService:
             return False
         self.db.collection(config.FIREBASE_TELEMETRY_COLLECTION).document(device_id).set(payload, merge=True)
         return True
-

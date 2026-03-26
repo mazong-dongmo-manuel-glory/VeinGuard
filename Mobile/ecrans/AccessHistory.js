@@ -1,22 +1,22 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   TextInput,
   StatusBar,
   Platform,
+  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, GRADIENTS } from '../theme';
-
 import { useMqttStore } from '../store/mqttStore';
-import { useEffect } from 'react';
+import { useAuthStore } from '../store/authStore';
 
 function StatCard({ label, value, color, icon }) {
   return (
@@ -36,30 +36,40 @@ function StatusTag({ status, color }) {
   );
 }
 
-function EventItem({ item, onPress }) {
+function EventItem({ item, onPress, compact, showTechnicalDetails }) {
   const { t } = useTranslation();
   const statusColor = item.status === 'GRANTED' ? COLORS.neonGreen : (item.status === 'DENIED' ? COLORS.neonRed : COLORS.neonAmber);
-  const name = item.username || 'UTILISATEUR INCONNU';
   const statusLabel =
     item.status === 'GRANTED'
       ? t('accessHistory.granted')
       : item.status === 'DENIED'
         ? t('accessHistory.denied')
         : item.status;
-  
+
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={styles.eventItem}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={[styles.eventItem, compact && styles.eventItemCompact]}>
       <BlurView intensity={15} tint="dark" style={styles.eventInner}>
         <View style={[styles.statusLine, { backgroundColor: statusColor }]} />
+        <View style={styles.eventIconWrap}>
+          <Ionicons
+            name={item.status === 'GRANTED' ? 'checkmark-circle-outline' : 'alert-circle-outline'}
+            size={20}
+            color={statusColor}
+          />
+        </View>
         <View style={styles.eventBody}>
           <View style={styles.eventHeader}>
-            <Text numberOfLines={1} style={styles.eventName}>{name.toUpperCase()}</Text>
+            <Text numberOfLines={1} style={styles.eventName}>{(item.username || 'UTILISATEUR INCONNU').toUpperCase()}</Text>
             <Text style={styles.eventTime}>{new Date(item.timestamp).toLocaleTimeString()}</Text>
           </View>
-          <Text numberOfLines={1} style={styles.eventSub}>{item.method.toUpperCase()} // PORTAIL-01</Text>
+          {showTechnicalDetails ? (
+            <Text numberOfLines={1} style={styles.eventSub}>{String(item.method || '').toUpperCase()} // PORTAIL-01</Text>
+          ) : null}
           <View style={styles.eventFooter}>
             <StatusTag status={statusLabel} color={statusColor} />
-            <Text style={[styles.eventScore, { color: statusColor }]}>{t('accessDecision.confidence')}: --</Text>
+            {showTechnicalDetails ? (
+              <Text style={[styles.eventScore, { color: statusColor }]}>{t('accessDecision.confidence')}: {item.score ?? '--'}</Text>
+            ) : null}
           </View>
         </View>
       </BlurView>
@@ -71,27 +81,55 @@ export default function AccessHistory({ navigation }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [logList, setLogList] = useState([]);
-  
+  const [refreshing, setRefreshing] = useState(false);
+
   const isConnected = useMqttStore((state) => state.isConnected);
   const fetchLogs = useMqttStore((state) => state.fetchLogs);
+  const preferences = useAuthStore((state) => state.preferences);
+  const autoRefreshData = Boolean(preferences?.autoRefreshData);
+  const compactLists = Boolean(preferences?.compactLists);
+  const showTechnicalDetails = Boolean(preferences?.showTechnicalDetails);
 
-  useEffect(() => {
-    if (isConnected) {
-      const loadLogs = async () => {
-        try {
-          const list = await fetchLogs();
-          setLogList(Array.isArray(list) ? list : []);
-        } catch (err) {
-          console.error('Failed to fetch logs:', err);
-        }
-      };
-      loadLogs();
+  const loadLogs = useCallback(async () => {
+    if (!isConnected) {
+      setLogList([]);
+      return;
+    }
+
+    try {
+      const list = await fetchLogs();
+      setLogList(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.error('Failed to fetch logs:', err);
     }
   }, [isConnected, fetchLogs]);
 
-  const filteredLogs = logList.filter(l => 
-    (l.username || 'unknown').toLowerCase().includes(search.toLowerCase()) ||
-    l.status.toLowerCase().includes(search.toLowerCase())
+  useFocusEffect(
+    useCallback(() => {
+      loadLogs();
+    }, [loadLogs]),
+  );
+
+  useEffect(() => {
+    if (!autoRefreshData || !isConnected) {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      loadLogs();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [autoRefreshData, isConnected, loadLogs]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadLogs();
+    setRefreshing(false);
+  };
+
+  const filteredLogs = logList.filter((log) =>
+    `${log.username || ''} ${log.status || ''}`.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
@@ -104,49 +142,56 @@ export default function AccessHistory({ navigation }) {
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('accessHistory.title')}</Text>
-        <TouchableOpacity style={styles.headerAction}>
-          <Ionicons name="download-outline" size={22} color={COLORS.neonCyan} />
+        <TouchableOpacity style={styles.headerAction} onPress={() => navigation?.navigate('AdminAuditLogs')}>
+          <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.neonCyan} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.searchSection}>
-          <BlurView intensity={10} style={styles.searchBar}>
-            <Ionicons name="search" size={18} color={COLORS.textDim} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={t('accessHistory.searchPlaceholder')}
-              placeholderTextColor={COLORS.textDim}
-              value={search}
-              onChangeText={setSearch}
-            />
-          </BlurView>
-        </View>
+      <FlatList
+        data={filteredLogs}
+        keyExtractor={(item, index) => String(item.id || index)}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        renderItem={({ item }) => (
+          <EventItem
+            item={item}
+            onPress={() => navigation?.navigate('AccessEvent', { event: item })}
+            compact={compactLists}
+            showTechnicalDetails={showTechnicalDetails}
+          />
+        )}
+        extraData={{ compactLists, showTechnicalDetails }}
+        ListHeaderComponent={(
+          <View>
+            <View style={styles.searchSection}>
+              <BlurView intensity={10} style={styles.searchBar}>
+                <Ionicons name="search" size={18} color={COLORS.textDim} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder={t('accessHistory.searchPlaceholder')}
+                  placeholderTextColor={COLORS.textDim}
+                  value={search}
+                  onChangeText={setSearch}
+                />
+              </BlurView>
+            </View>
 
-        <View style={styles.statsRow}>
-          <StatCard label={t('accessHistory.granted')} value={logList.filter(l => l.status === 'GRANTED').length} color={COLORS.neonGreen} icon="checkmark-circle" />
-          <StatCard label={t('accessHistory.denied')} value={logList.filter(l => l.status === 'DENIED').length} color={COLORS.neonRed} icon="close-circle" />
-          <StatCard label={t('accessHistory.errors')} value="0" color={COLORS.neonAmber} icon="warning" />
-        </View>
+            <View style={styles.statsRow}>
+              <StatCard label={t('accessHistory.granted')} value={logList.filter((l) => l.status === 'GRANTED').length} color={COLORS.neonGreen} icon="checkmark-circle" />
+              <StatCard label={t('accessHistory.denied')} value={logList.filter((l) => l.status === 'DENIED').length} color={COLORS.neonRed} icon="close-circle" />
+              <StatCard label={t('accessHistory.errors')} value="0" color={COLORS.neonAmber} icon="warning" />
+            </View>
 
-        <View style={styles.logSection}>
-          <Text style={styles.sectionTitle}>{t('accessHistory.eventLog').toUpperCase()}</Text>
-          {filteredLogs.map((item, i) => (
-            <EventItem
-              key={item.id || i}
-              item={item}
-              onPress={() => navigation?.navigate('AccessEvent', { event: item })}
-            />
-          ))}
-          {filteredLogs.length === 0 && (
-            <Text style={{ color: COLORS.textDim, textAlign: 'center', marginTop: 20 }}>
-                {t('accessHistory.noEvents')}
-            </Text>
-          )}
-        </View>
-        
-        <View style={{ height: 40 }} />
-      </ScrollView>
+            <View style={styles.logSection}>
+              <Text style={styles.sectionTitle}>{t('accessHistory.eventLog').toUpperCase()}</Text>
+            </View>
+          </View>
+        )}
+        ListEmptyComponent={<Text style={styles.emptyText}>{t('accessHistory.noEvents')}</Text>}
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 }
@@ -164,10 +209,8 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
   headerTitle: { color: COLORS.white, fontSize: 18, fontWeight: '800', letterSpacing: 1 },
   headerAction: { width: 40, height: 40, alignItems: 'flex-end', justifyContent: 'center' },
-
   scroll: { flex: 1, paddingHorizontal: 20 },
-  scrollContent: { paddingTop: 10 },
-  
+  scrollContent: { paddingTop: 10, paddingBottom: 40 },
   searchSection: { marginBottom: 25 },
   searchBar: {
     flexDirection: 'row',
@@ -181,7 +224,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   searchInput: { flex: 1, color: COLORS.white, fontSize: 14, fontWeight: '500' },
-
   statsRow: { flexDirection: 'row', gap: 12, marginBottom: 30 },
   statCard: {
     flex: 1,
@@ -194,13 +236,14 @@ const styles = StyleSheet.create({
   statIcon: { marginBottom: 10 },
   statValue: { fontSize: 24, fontWeight: '900', marginBottom: 4 },
   statLabel: { color: COLORS.textDim, fontSize: 8, fontWeight: '800', letterSpacing: 1 },
-
-  logSection: { gap: 12 },
+  logSection: { marginBottom: 10 },
   sectionTitle: { color: COLORS.textDim, fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 15 },
-
+  emptyText: { color: COLORS.textDim, textAlign: 'center', marginTop: 20 },
   eventItem: { marginBottom: 12, borderRadius: 20, overflow: 'hidden' },
-  eventInner: { flexDirection: 'row', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)' },
+  eventItemCompact: { marginBottom: 10 },
+  eventInner: { flexDirection: 'row', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)', alignItems: 'stretch' },
   statusLine: { width: 4 },
+  eventIconWrap: { width: 44, justifyContent: 'center', alignItems: 'center' },
   eventBody: { flex: 1, padding: 15 },
   eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5, gap: 10 },
   eventName: { color: COLORS.white, fontSize: 14, fontWeight: '800', letterSpacing: 0.5, flex: 1 },

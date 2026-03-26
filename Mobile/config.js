@@ -13,6 +13,8 @@ export const MQTT_TOPICS = {
   loginCmd: topic('cmd/auth/login'),
   usersCmd: topic('cmd/users/list'),
   enrollCmd: topic('cmd/users/enroll'),
+  usersUpdateCmd: topic('cmd/users/update'),
+  usersDeleteCmd: topic('cmd/users/delete'),
   scanCmd: topic('cmd/access/scan'),
   logsCmd: topic('cmd/access/logs'),
   auditCmd: topic('cmd/audit/list'),

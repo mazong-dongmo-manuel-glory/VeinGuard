@@ -14,9 +14,9 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { COLORS, GRADIENTS } from '../theme';
 import { useMqttStore } from '../store/mqttStore';
+import { useAuthStore } from '../store/authStore';
 
 function SectionHeader({ icon, title, color = COLORS.neonCyan }) {
   return (
@@ -53,6 +53,8 @@ export default function SystemSetting({ navigation }) {
   const isConnected = useMqttStore((state) => state.isConnected);
   const telemetry = useMqttStore((state) => state.telemetry);
   const updateSystemSettings = useMqttStore((state) => state.updateSystemSettings);
+  const preferences = useAuthStore((state) => state.preferences);
+  const updatePreferences = useAuthStore((state) => state.updatePreferences);
 
   const [autoLightEnabled, setAutoLightEnabled] = useState(true);
   const [assistLightsOn, setAssistLightsOn] = useState(false);
@@ -88,6 +90,14 @@ export default function SystemSetting({ navigation }) {
       Alert.alert(t('common.success'), successMessage);
     } catch (error) {
       Alert.alert(t('common.error'), error?.message || t('systemSettings.systemOfflineDesc'));
+    }
+  };
+
+  const handlePreferenceChange = async (patch) => {
+    try {
+      await updatePreferences(patch);
+    } catch (error) {
+      Alert.alert(t('common.error'), error?.message || t('systemSettings.preferencesError'));
     }
   };
 
@@ -174,6 +184,34 @@ export default function SystemSetting({ navigation }) {
           ) : (
             <Text style={styles.emptyText}>{t('systemSettings.telemetryUnavailable')}</Text>
           )}
+        </View>
+
+        <View style={styles.card}>
+          <SectionHeader icon="phone-portrait-outline" title={t('systemSettings.mobilePreferencesTitle')} color={COLORS.neonCyan} />
+          <View style={styles.cardContent}>
+            <ToggleRow
+              title={t('systemSettings.prefAutoRefreshTitle')}
+              description={t('systemSettings.prefAutoRefreshDesc')}
+              value={Boolean(preferences?.autoRefreshData)}
+              onValueChange={(value) => handlePreferenceChange({ autoRefreshData: value })}
+              color={COLORS.neonGreen}
+            />
+            <ToggleRow
+              title={t('systemSettings.prefCompactListsTitle')}
+              description={t('systemSettings.prefCompactListsDesc')}
+              value={Boolean(preferences?.compactLists)}
+              onValueChange={(value) => handlePreferenceChange({ compactLists: value })}
+              color={COLORS.neonAmber}
+            />
+            <ToggleRow
+              title={t('systemSettings.prefTechnicalTitle')}
+              description={t('systemSettings.prefTechnicalDesc')}
+              value={Boolean(preferences?.showTechnicalDetails)}
+              onValueChange={(value) => handlePreferenceChange({ showTechnicalDetails: value })}
+              color={COLORS.neonCyan}
+            />
+            <Text style={styles.helperText}>{t('systemSettings.prefPersistenceNote')}</Text>
+          </View>
         </View>
 
         <View style={styles.card}>

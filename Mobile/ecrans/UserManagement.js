@@ -1,22 +1,23 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   TextInput,
   StatusBar,
   Platform,
+  FlatList,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { useFocusEffect } from '@react-navigation/native';
 import { COLORS, GRADIENTS } from '../theme';
-
 import { useMqttStore } from '../store/mqttStore';
-import { useEffect } from 'react';
+import { useAuthStore } from '../store/authStore';
 
 function RoleBadge({ role, color }) {
   return (
@@ -34,15 +35,13 @@ function StatusBadge({ status, color }) {
   );
 }
 
-function UserCard({ user }) {
+function UserCard({ user, onEdit, onDelete, compact, showTechnicalDetails }) {
   const { t } = useTranslation();
-  
-  // Mapping backend data to UI
   const roleColor = user.role === 'admin' ? '#2060ff' : COLORS.neonCyan;
-  const statusColor = COLORS.neonGreen; // Default to active for now
-  
+  const statusColor = COLORS.neonGreen;
+
   return (
-    <BlurView intensity={15} tint="dark" style={styles.userCard}>
+    <BlurView intensity={15} tint="dark" style={[styles.userCard, compact && styles.userCardCompact]}>
       <View style={styles.userCardHeader}>
         <View style={styles.userAvatar}>
           <LinearGradient colors={['#1c3d5a', '#0d1b2e']} style={styles.avatarInner}>
@@ -51,34 +50,37 @@ function UserCard({ user }) {
         </View>
         <View style={styles.userInfo}>
           <Text numberOfLines={1} style={styles.userName}>{user.username}</Text>
-          <Text numberOfLines={1} style={styles.userEmail}>{user.role.toUpperCase()}</Text>
+          {showTechnicalDetails ? (
+            <Text numberOfLines={1} style={styles.userEmail}>{user.email || user.role.toUpperCase()}</Text>
+          ) : null}
           <View style={styles.badgeRow}>
-            <RoleBadge role={user.role.toUpperCase()} color={roleColor} />
+            <RoleBadge role={String(user.role || '').toUpperCase()} color={roleColor} />
             <StatusBadge status={t('userManagement.activeStatus')} color={statusColor} />
           </View>
         </View>
-        <TouchableOpacity style={styles.moreBtn}>
-          <Ionicons name="ellipsis-vertical" size={20} color={COLORS.textDim} />
-        </TouchableOpacity>
-      </View>
-      
-      <View style={styles.userDetails}>
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>{t('userManagement.enrolledAt').toUpperCase()}</Text>
-          <Text style={styles.detailValue}>{new Date(user.created_at).toLocaleDateString()}</Text>
-        </View>
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>{t('userManagement.idLabel')}</Text>
-          <Text style={[styles.detailValue, { color: COLORS.neonCyan }]}>#00{user.id}</Text>
-        </View>
       </View>
 
+      {showTechnicalDetails ? (
+        <View style={styles.userDetails}>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>{t('userManagement.enrolledAt').toUpperCase()}</Text>
+            <Text style={styles.detailValue}>{new Date(user.created_at).toLocaleDateString()}</Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>{t('userManagement.idLabel')}</Text>
+            <Text style={[styles.detailValue, { color: COLORS.neonCyan }]}>#{user.id}</Text>
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.cardActions}>
-        <TouchableOpacity style={[styles.actionBtn, { borderColor: COLORS.neonPurple }]}>
+        <TouchableOpacity style={[styles.actionBtn, { borderColor: COLORS.neonPurple }]} onPress={onEdit}>
+          <Ionicons name="create-outline" size={16} color={COLORS.neonPurple} />
           <Text style={[styles.actionBtnText, { color: COLORS.neonPurple }]}>{t('userManagement.editBtn').toUpperCase()}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionBtn, { borderColor: COLORS.textDim, opacity: 0.6 }]}>
-          <Ionicons name="settings-outline" size={18} color={COLORS.textDim} />
+        <TouchableOpacity style={[styles.actionBtn, { borderColor: COLORS.neonRed }]} onPress={onDelete}>
+          <Ionicons name="trash-outline" size={16} color={COLORS.neonRed} />
+          <Text style={[styles.actionBtnText, { color: COLORS.neonRed }]}>{t('userManagement.deleteBtn').toUpperCase()}</Text>
         </TouchableOpacity>
       </View>
     </BlurView>
@@ -89,26 +91,80 @@ export default function UserManagement({ navigation }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [usersList, setUsersList] = useState([]);
-  const fetchUsers = useMqttStore((state) => state.fetchUsers);
-  const isConnected = useMqttStore((state) => state.isConnected);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (isConnected) {
-      const loadUsers = async () => {
-        try {
-          const list = await fetchUsers();
-          setUsersList(Array.isArray(list) ? list : []);
-        } catch (err) {
-          console.error('Failed to fetch users:', err);
-        }
-      };
-      loadUsers();
+  const fetchUsers = useMqttStore((state) => state.fetchUsers);
+  const deleteUser = useMqttStore((state) => state.deleteUser);
+  const isConnected = useMqttStore((state) => state.isConnected);
+  const preferences = useAuthStore((state) => state.preferences);
+  const autoRefreshData = Boolean(preferences?.autoRefreshData);
+  const compactLists = Boolean(preferences?.compactLists);
+  const showTechnicalDetails = Boolean(preferences?.showTechnicalDetails);
+
+  const loadUsers = useCallback(async () => {
+    if (!isConnected) {
+      setUsersList([]);
+      return;
+    }
+
+    try {
+      const list = await fetchUsers();
+      setUsersList(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.error('Failed to fetch users:', err);
     }
   }, [isConnected, fetchUsers]);
 
-  const filteredUsers = usersList.filter(u => 
-    u.username.toLowerCase().includes(search.toLowerCase())
+  useFocusEffect(
+    useCallback(() => {
+      loadUsers();
+    }, [loadUsers]),
   );
+
+  useEffect(() => {
+    if (!autoRefreshData || !isConnected) {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      loadUsers();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [autoRefreshData, isConnected, loadUsers]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadUsers();
+    setRefreshing(false);
+  };
+
+  const handleDelete = (user) => {
+    Alert.alert(
+      'Supprimer utilisateur',
+      `Supprimer ${user.username} ?`,
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteUser(user.id);
+              await loadUsers();
+            } catch (error) {
+              Alert.alert(t('common.error'), error?.message || 'Suppression impossible.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const filteredUsers = usersList.filter((user) => {
+    const haystack = `${user.username || ''} ${user.email || ''} ${user.role || ''}`.toLowerCase();
+    return haystack.includes(search.toLowerCase());
+  });
 
   return (
     <View style={styles.screen}>
@@ -120,50 +176,62 @@ export default function UserManagement({ navigation }) {
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('userManagement.title')}</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={() => navigation?.navigate('EnrollUser')}>
+        <TouchableOpacity style={styles.addBtn} onPress={() => navigation?.navigate('EnrollUser', { mode: 'create' })}>
           <LinearGradient colors={GRADIENTS.neonCyan} style={styles.addBtnGradient}>
             <Ionicons name="add" size={24} color={COLORS.white} />
           </LinearGradient>
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.welcomeSection}>
-          <Text style={styles.subtitle}>{t('userManagement.subtitle')}</Text>
-        </View>
-
-        {/* Search & Filters */}
-        <BlurView intensity={10} style={styles.searchCard}>
-          <View style={styles.searchRow}>
-            <Ionicons name="search" size={20} color={COLORS.neonCyan} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={t('userManagement.searchPlaceholder')}
-              placeholderTextColor={COLORS.textDim}
-              value={search}
-              onChangeText={setSearch}
-            />
-          </View>
-        </BlurView>
-
-        {/* User list */}
-        <View style={styles.listHeader}>
-          <Text style={styles.listTitle}>{t('userManagement.activeStream')}</Text>
-          <Text style={styles.listCount}>{t('userManagement.onlineCount', { count: filteredUsers.length })}</Text>
-        </View>
-
-        {filteredUsers.length === 0 && !isConnected && (
-            <Text style={{ color: COLORS.textDim, textAlign: 'center', marginTop: 20 }}>
-                {t('userManagement.gatewayDisconnected')}
-            </Text>
+      <FlatList
+        data={filteredUsers}
+        keyExtractor={(item, index) => String(item.id || index)}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        renderItem={({ item }) => (
+          <UserCard
+            user={item}
+            onEdit={() => navigation?.navigate('EnrollUser', { mode: 'edit', user: item })}
+            onDelete={() => handleDelete(item)}
+            compact={compactLists}
+            showTechnicalDetails={showTechnicalDetails}
+          />
         )}
+        extraData={{ compactLists, showTechnicalDetails }}
+        ListHeaderComponent={(
+          <View>
+            <View style={styles.welcomeSection}>
+              <Text style={styles.subtitle}>{t('userManagement.subtitle')}</Text>
+            </View>
 
-        {filteredUsers.map((user, i) => (
-          <UserCard key={user.id || i} user={user} />
-        ))}
+            <BlurView intensity={10} style={styles.searchCard}>
+              <View style={styles.searchRow}>
+                <Ionicons name="search" size={20} color={COLORS.neonCyan} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder={t('userManagement.searchPlaceholder')}
+                  placeholderTextColor={COLORS.textDim}
+                  value={search}
+                  onChangeText={setSearch}
+                />
+              </View>
+            </BlurView>
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
+            <View style={styles.listHeader}>
+              <Text style={styles.listTitle}>{t('userManagement.activeStream')}</Text>
+              <Text style={styles.listCount}>{t('userManagement.onlineCount', { count: filteredUsers.length })}</Text>
+            </View>
+          </View>
+        )}
+        ListEmptyComponent={(
+          <Text style={styles.emptyText}>
+            {isConnected ? t('accessHistory.noEvents') : t('userManagement.gatewayDisconnected')}
+          </Text>
+        )}
+        contentContainerStyle={styles.scrollContent}
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 }
@@ -182,11 +250,10 @@ const styles = StyleSheet.create({
   headerTitle: { color: COLORS.white, fontSize: 20, fontWeight: '800', letterSpacing: 1 },
   addBtn: { width: 40, height: 40, borderRadius: 12, overflow: 'hidden' },
   addBtnGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-
   scroll: { flex: 1, paddingHorizontal: 20 },
+  scrollContent: { paddingTop: 10, paddingBottom: 40 },
   welcomeSection: { marginBottom: 25 },
   subtitle: { color: COLORS.textSecondary, fontSize: 14 },
-
   searchCard: {
     borderRadius: 24,
     padding: 20,
@@ -200,28 +267,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 16,
     paddingHorizontal: 15,
-    marginBottom: 15,
   },
   searchInput: { flex: 1, color: COLORS.white, paddingVertical: 15, marginLeft: 10, fontSize: 15 },
-  filterRow: { flexDirection: 'row', gap: 10 },
-  filterChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  filterChipText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' },
-
   listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 15, gap: 12 },
   listTitle: { color: COLORS.textDim, fontSize: 11, fontWeight: '800', letterSpacing: 2 },
   listCount: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '700', textAlign: 'right' },
-
+  emptyText: { color: COLORS.textDim, textAlign: 'center', marginTop: 20 },
   userCard: {
     borderRadius: 24,
     padding: 20,
@@ -229,6 +280,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.05)',
     marginBottom: 15,
     overflow: 'hidden',
+  },
+  userCardCompact: {
+    paddingVertical: 16,
+    paddingHorizontal: 16,
   },
   userCardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 20 },
   userAvatar: { width: 50, height: 50, borderRadius: 25, overflow: 'hidden', marginRight: 15 },
@@ -239,8 +294,6 @@ const styles = StyleSheet.create({
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
   badgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
-  moreBtn: { padding: 5, marginLeft: 8 },
-
   userDetails: {
     flexDirection: 'row',
     gap: 12,
@@ -252,7 +305,6 @@ const styles = StyleSheet.create({
   detailItem: { flex: 1, minWidth: 0 },
   detailLabel: { color: COLORS.textDim, fontSize: 9, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
   detailValue: { color: COLORS.white, fontSize: 12, fontWeight: '700', flexShrink: 1 },
-
   cardActions: { flexDirection: 'row', gap: 10 },
   actionBtn: {
     flex: 1,
@@ -261,6 +313,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
   actionBtnText: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
 });

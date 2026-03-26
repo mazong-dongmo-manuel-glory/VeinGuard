@@ -2,7 +2,7 @@
 
 ## 1. Résumé du projet
 
-BioGuard Access est un système de contrôle d'accès intelligent conçu autour d'un Raspberry Pi. Le prototype identifie une personne avec une combinaison de biométrie palmaire et de géométrie des doigts, puis transmet les événements vers une application mobile via MQTT. Les données de profils, d'historique et de télémétrie sont synchronisées vers Firebase.
+BioGuard Access est un système de contrôle d'accès intelligent conçu autour d'un Raspberry Pi. Le prototype identifie une personne avec une combinaison de biométrie palmaire et de géométrie des doigts, mesure la luminosité ambiante, puis transmet les événements vers une application mobile via MQTT. Les données de profils, d'historique, de télémétrie et de préférences utilisateur sont synchronisées vers Firebase.
 
 Le projet répond aux exigences IoT et mobile en combinant :
 
@@ -37,14 +37,13 @@ Les petites entreprises, laboratoires, salles d'équipement et locaux sensibles 
 ### Capteurs
 
 1. Caméra Raspberry Pi : capture de la paume et des doigts
-2. Capteur tactile / contact : confirme que l'utilisateur touche le point d'entrée
-3. Capteur ultrasonique : détecte la présence devant le lecteur
-4. Capteur PIR : détecte le mouvement près de la porte
+2. Capteur de lumière : mesure la luminosité pour piloter l'éclairage d'appoint
 
 ### Actionneurs
 
 - LED verte : accès autorisé
 - LED rouge : accès refusé
+- deux LED d'éclairage : assistance visuelle si la pièce est sombre
 - buzzer : retour sonore
 - écran LCD I2C : instructions, état et messages
 
@@ -63,6 +62,50 @@ Passerelle Raspberry Pi
         v
 Porte / système d'accès
 ```
+
+## 6.1 Backend IoT
+
+Le backend IoT correspond au Raspberry Pi et à tous les modules Python du dossier `iot/`.
+
+Responsabilités :
+
+- lecture des capteurs réellement disponibles
+- pilotage du LCD, des LED et du buzzer
+- capture biométrique via la caméra
+- comparaison biométrique locale
+- journalisation locale SQLite
+- synchronisation Firebase
+- exposition des commandes et réponses via MQTT
+
+Modules principaux :
+
+- `mqtt_gateway.py`
+- `core/security_controller.py`
+- `hardware/`
+- `database.py`
+- `cloud/firebase_service.py`
+
+## 6.2 Application mobile
+
+L'application mobile correspond au projet Expo du dossier `Mobile/`.
+
+Responsabilités :
+
+- authentification Firebase
+- affichage des utilisateurs, événements et audits
+- CRUD utilisateur
+- consultation de la télémétrie
+- envoi des commandes MQTT au backend IoT
+- gestion des préférences propres à l'utilisateur
+
+Modules principaux :
+
+- `App.js`
+- `navigation/NavigationRoot.js`
+- `store/authStore.js`
+- `store/mqttStore.js`
+- `services/firebase.js`
+- `ecrans/`
 
 ## 7. Algorithme biométrique
 
@@ -94,7 +137,7 @@ Pourquoi ce choix :
 ### Accès
 
 1. L'utilisateur se présente devant la porte.
-2. Le capteur de présence et le capteur de mouvement s'activent.
+2. Le Pi vérifie la luminosité ambiante et active au besoin les LED d'éclairage.
 3. Le LCD demande la paume et le positionnement des doigts.
 4. Le Pi capture les données et calcule un score.
 5. Si le score est sous le seuil, LED verte + buzzer court.
@@ -116,6 +159,21 @@ Pourquoi ce choix :
 - Zustand pour l'état local
 - MQTT pour les actions temps réel
 - Firebase pour les données cloud et l'administration
+- `AsyncStorage` et `SecureStore` pour la session et les préférences locales
+- `FlatList` avec icônes pour les utilisateurs, l'historique et les audits
+- authentification email / mot de passe avec création de compte et session persistante optionnelle
+
+## 9.1 Frontière backend / mobile
+
+Le backend IoT n'expose pas une API HTTP. La frontière entre les deux couches repose sur :
+
+- MQTT pour les commandes et retours temps réel
+- Firebase pour l'authentification et le stockage cloud
+
+En pratique :
+
+- le backend IoT exécute la logique métier matérielle
+- le mobile agit comme client d'administration et d'observation
 
 ## 10. Utilisation de Firebase
 
@@ -127,6 +185,7 @@ Collections proposées :
 - `biometric_profiles`
 - `access_events`
 - `device_telemetry`
+- `mobile_user_preferences`
 
 Rôle de Firebase :
 
@@ -143,6 +202,8 @@ Le Raspberry Pi garde aussi un cache SQLite pour éviter qu'une panne réseau bl
 - `bioguard/cmd/auth/login`
 - `bioguard/cmd/users/list`
 - `bioguard/cmd/users/enroll`
+- `bioguard/cmd/users/update`
+- `bioguard/cmd/users/delete`
 - `bioguard/cmd/access/scan`
 - `bioguard/cmd/access/logs`
 - `bioguard/cmd/audit/list`
@@ -173,13 +234,15 @@ Le Raspberry Pi garde aussi un cache SQLite pour éviter qu'une panne réseau bl
 
 Séquence recommandée :
 
-1. Montrer l'écran mobile et l'état en ligne du système.
+1. Montrer l'écran mobile, la connexion Firebase et la session persistante.
 2. Présenter le prototype physique avec LCD, LEDs et buzzer.
 3. Enrôler un utilisateur.
+4. Modifier un utilisateur puis le supprimer.
 4. Faire une tentative d'accès valide.
 5. Faire une tentative d'accès refusée.
 6. Montrer l'historique dans l'application.
-7. Expliquer que Firebase sert de backend et SQLite de cache local.
+7. Montrer les paramètres par utilisateur et le contrôle des actionneurs.
+8. Expliquer que Firebase sert de backend et SQLite de cache local.
 
 ## 14. Coût de production estimé
 
@@ -187,14 +250,12 @@ Séquence recommandée :
 |---|---:|
 | Raspberry Pi | 90 $ |
 | Caméra Pi | 30 $ |
+| Capteur de lumière | 3 $ |
 | LCD I2C | 10 $ |
 | LEDs + résistances + buzzer | 8 $ |
-| Capteur ultrasonique | 5 $ |
-| Capteur PIR | 6 $ |
-| Capteur tactile | 5 $ |
 | Boîtier imprimé 3D | 20 $ |
 | Alimentation et câblage | 15 $ |
-| **Total** | **189 $** |
+| **Total** | **176 $** |
 
 ## 15. Prix de vente proposé
 
@@ -208,10 +269,10 @@ Justification :
 
 ## 16. Marge de profit
 
-- Coût unitaire estimé : 189 $
+- Coût unitaire estimé : 176 $
 - Prix de vente : 399 $
-- Profit unitaire : 210 $
-- Profit sur 1000 unités : 210 000 $
+- Profit unitaire : 223 $
+- Profit sur 1000 unités : 223 000 $
 
 ## 17. Investissement demandé au Dragon
 
@@ -228,10 +289,11 @@ Utilisation prévue :
 ## 18. Points forts du prototype
 
 - aligné avec les contraintes IoT
-- mobile + MQTT + cloud
+- mobile + MQTT + Firebase
 - prototype démontrable en direct
 - logique biométrique explicable
 - bonne séparation entre edge local et backend cloud
+- exigences mobiles couvertes : auth, paramètres, listes, stockage local, CRUD
 
 ## 19. Limites actuelles
 

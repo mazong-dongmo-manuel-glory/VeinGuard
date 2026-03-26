@@ -14,6 +14,8 @@ import SystemSetting from '../ecrans/SystemSetting';
 import UserManagement from '../ecrans/UserManagement';
 import VeinScanBiometrics from '../ecrans/VeinScanBiometrics';
 import EnrollUser from '../ecrans/EnrollUser';
+import AdminAuditLogs from '../ecrans/AdminAuditLogs';
+import { useAuthStore } from '../store/authStore';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -88,6 +90,7 @@ function HistoryStackScreen() {
     <HistoryStack.Navigator screenOptions={{ headerShown: false }}>
       <HistoryStack.Screen name="AccessHistoryList" component={AccessHistory} />
       <HistoryStack.Screen name="AccessEvent" component={AccessEvent} />
+      <HistoryStack.Screen name="AdminAuditLogs" component={AdminAuditLogs} />
     </HistoryStack.Navigator>
   );
 }
@@ -190,9 +193,7 @@ function MainTabs() {
 function AppStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Login" component={Login} />
       <Stack.Screen name="Dashboard" component={MainTabs} />
-      {/* Écran de décision accessible en push depuis le scan */}
       <Stack.Screen
         name="AccessDecision"
         component={AccessDecision}
@@ -204,9 +205,15 @@ function AppStack() {
 
 // ─── Racine ────────────────────────────────────────────────────────────────
 export default function NavigationRoot() {
+  const user = useAuthStore((state) => state.user);
+
   return (
     <NavigationContainer>
-      <AppStack />
+      {user ? <AppStack /> : (
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Login" component={Login} />
+        </Stack.Navigator>
+      )}
     </NavigationContainer>
   );
 }

@@ -16,42 +16,61 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { useMqttStore } from '../store/mqttStore';
 import { COLORS, GRADIENTS, SHADOWS } from '../theme';
-import { FIREBASE_ENABLED } from '../services/firebase';
-import { getFirebaseAuthErrorMessage, loginWithEmailPassword } from '../services/auth';
+import { getFirebaseAuthErrorMessage, requestPasswordReset } from '../services/auth';
+import { useAuthStore } from '../store/authStore';
 
 export default function Login({ navigation }) {
   const { t } = useTranslation();
-  const { width, height } = useWindowDimensions();
-  const [username, setUsername] = useState('');
+  const { width } = useWindowDimensions();
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  
-  const isConnected = useMqttStore((state) => state.isConnected);
+  const [rememberSession, setRememberSession] = useState(true);
+  const [isSignupMode, setIsSignupMode] = useState(false);
+  const login = useAuthStore((state) => state.login);
+  const signup = useAuthStore((state) => state.signup);
 
   const handleLogin = async () => {
-    if (!username || !password) {
-      Alert.alert("Erreur", "Veuillez entrer un nom d'utilisateur et un mot de passe.");
+    if (!email || !password) {
+      Alert.alert("Erreur", "Veuillez entrer une adresse e-mail et un mot de passe.");
+      return;
+    }
+
+    if (!String(email).includes('@')) {
+      Alert.alert("Erreur", "Veuillez entrer une adresse e-mail valide.");
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert("Erreur", "Le mot de passe doit contenir au moins 6 caractères.");
+      return;
+    }
+
+    if (isSignupMode && password !== confirmPassword) {
+      Alert.alert("Erreur", "Les mots de passe ne correspondent pas.");
       return;
     }
 
     try {
-      if (FIREBASE_ENABLED) {
-        await loginWithEmailPassword(username, password);
-        if (navigation) navigation.navigate('Dashboard');
-        return;
+      if (isSignupMode) {
+        await signup({ email, password, rememberSession });
+      } else {
+        await login({ email, password, rememberSession });
       }
-
-      if (!isConnected) {
-        Alert.alert("Erreur Connexion", "Le système est hors-ligne. Veuillez vérifier le broker MQTT.");
-        return;
-      }
-
-      Alert.alert("Erreur", "Firebase Authentication n'est pas disponible.");
     } catch (error) {
-      Alert.alert("Échec de connexion", getFirebaseAuthErrorMessage(error));
+      Alert.alert(isSignupMode ? "Échec de création du compte" : "Échec de connexion", getFirebaseAuthErrorMessage(error));
       console.error(error);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    try {
+      await requestPasswordReset(email);
+      Alert.alert(t('common.success'), t('login.resetPasswordDesc'));
+    } catch (error) {
+      Alert.alert(t('common.error'), getFirebaseAuthErrorMessage(error));
     }
   };
 
@@ -112,9 +131,10 @@ export default function Login({ navigation }) {
                     style={styles.input}
                     placeholder={t('login.emailPlaceholder')}
                     placeholderTextColor={COLORS.textDim}
-                    value={username}
-                    onChangeText={setUsername}
+                    value={email}
+                    onChangeText={setEmail}
                     autoCapitalize="none"
+                    keyboardType="email-address"
                   />
                 </View>
               </View>
@@ -137,9 +157,37 @@ export default function Login({ navigation }) {
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.forgotBtn}>
-                <Text style={styles.forgotText}>{t('login.forgotPassword')}</Text>
+              {isSignupMode && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>{t('login.confirmPasswordLabel')}</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.neonCyan} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder={t('login.confirmPasswordPlaceholder')}
+                      placeholderTextColor={COLORS.textDim}
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      secureTextEntry={!showPassword}
+                    />
+                  </View>
+                </View>
+              )}
+
+              <TouchableOpacity style={styles.rememberRow} onPress={() => setRememberSession((value) => !value)} activeOpacity={0.8}>
+                <Ionicons
+                  name={rememberSession ? 'checkbox' : 'square-outline'}
+                  size={20}
+                  color={rememberSession ? COLORS.neonCyan : COLORS.textDim}
+                />
+                <Text style={styles.rememberText}>{t('login.rememberSession')}</Text>
               </TouchableOpacity>
+
+              {!isSignupMode && (
+                <TouchableOpacity style={styles.forgotBtn} onPress={handleForgotPassword}>
+                  <Text style={styles.forgotText}>{t('login.forgotPassword')}</Text>
+                </TouchableOpacity>
+              )}
 
               {/* MAIN ACTION */}
               <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin} activeOpacity={0.8}>
@@ -149,31 +197,17 @@ export default function Login({ navigation }) {
                   end={{ x: 1, y: 0 }}
                   style={styles.btnGradient}
                 >
-                  <Text style={styles.btnText}>{t('login.accessSystem').toUpperCase()}</Text>
+                  <Text style={styles.btnText}>{isSignupMode ? t('login.createAccount') : t('login.accessSystem').toUpperCase()}</Text>
                   <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
                 </LinearGradient>
               </TouchableOpacity>
+
+              <TouchableOpacity style={styles.authToggleBtn} onPress={() => setIsSignupMode((value) => !value)}>
+                <Text style={styles.authToggleText}>
+                  {isSignupMode ? t('login.loginInstead') : t('login.signupInstead')}
+                </Text>
+              </TouchableOpacity>
             </BlurView>
-
-            {/* Quick Access Divider */}
-            <View style={styles.divider}>
-              <View style={styles.line} />
-              <Text style={styles.dividerText}>{t('login.orQuickAccess').toUpperCase()}</Text>
-              <View style={styles.line} />
-            </View>
-
-            {/* Alternative Methods */}
-            <View style={styles.quickActions}>
-              <TouchableOpacity style={[styles.secondaryBtn, { borderColor: COLORS.neonGreen }]}>
-                <Ionicons name="finger-print" size={22} color={COLORS.neonGreen} />
-                <Text style={[styles.secondaryBtnText, { color: COLORS.neonGreen }]}>{t('login.biometricLogin')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={[styles.secondaryBtn, { borderColor: COLORS.neonMagenta }]}>
-                <Ionicons name="scan-outline" size={22} color={COLORS.neonMagenta} />
-                <Text style={[styles.secondaryBtnText, { color: COLORS.neonMagenta }]}>{t('login.veinBtn')}</Text>
-              </TouchableOpacity>
-            </View>
 
             <View style={styles.footer}>
               <Text style={styles.footerText}>{t('login.footer')}</Text>
@@ -249,6 +283,8 @@ const styles = StyleSheet.create({
   inputIcon: { marginRight: 12 },
   input: { flex: 1, paddingVertical: 15, color: COLORS.white, fontSize: 15 },
 
+  rememberRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 18 },
+  rememberText: { color: COLORS.textSecondary, fontSize: 13, fontWeight: '500' },
   forgotBtn: { alignSelf: 'flex-end', marginBottom: 25 },
   forgotText: { color: COLORS.neonCyan, fontSize: 13, fontWeight: '500' },
 
@@ -261,23 +297,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   btnText: { color: COLORS.white, fontSize: 15, fontWeight: '900', letterSpacing: 2 },
-
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 35, width: '100%' },
-  line: { flex: 1, height: 1, backgroundColor: 'rgba(255, 255, 255, 0.1)' },
-  dividerText: { color: COLORS.textDim, fontSize: 10, marginHorizontal: 15, letterSpacing: 2, fontWeight: '700' },
-
-  quickActions: { gap: 15, width: '100%' },
-  secondaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    backgroundColor: 'transparent',
-    gap: 12,
-  },
-  secondaryBtnText: { fontSize: 14, fontWeight: '800', letterSpacing: 1 },
+  authToggleBtn: { marginTop: 16, alignSelf: 'center' },
+  authToggleText: { color: COLORS.neonCyan, fontSize: 13, fontWeight: '600' },
 
   footer: { marginTop: 40, alignItems: 'center' },
   footerText: { color: COLORS.textDim, fontSize: 10, letterSpacing: 2, marginBottom: 15 },

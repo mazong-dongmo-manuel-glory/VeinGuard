@@ -1,4 +1,9 @@
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import {
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
 import { auth, FIREBASE_ENABLED } from './firebase';
 
 export async function loginWithEmailPassword(email, password) {
@@ -35,9 +40,31 @@ export function getFirebaseAuthErrorMessage(error) {
       return 'La connexion réseau a échoué.';
     case 'auth/operation-not-allowed':
       return "La connexion par e-mail et mot de passe n'est pas activée dans Firebase.";
+    case 'auth/email-already-in-use':
+      return 'Cette adresse e-mail est déjà utilisée.';
+    case 'auth/weak-password':
+      return 'Le mot de passe est trop faible.';
+    case 'auth/missing-email':
+      return "Veuillez saisir une adresse e-mail.";
     default:
       return error?.message || 'Échec de connexion.';
   }
+}
+
+export async function signupWithEmailPassword(email, password) {
+  if (!FIREBASE_ENABLED || !auth) {
+    throw new Error('Firebase Authentication is not available.');
+  }
+
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const normalizedPassword = String(password || '');
+
+  if (!normalizedEmail || !normalizedPassword) {
+    throw new Error('Veuillez entrer une adresse e-mail et un mot de passe.');
+  }
+
+  const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, normalizedPassword);
+  return credential.user;
 }
 
 export async function logoutFromFirebase() {
@@ -46,4 +73,17 @@ export async function logoutFromFirebase() {
   }
 
   await signOut(auth);
+}
+
+export async function requestPasswordReset(email) {
+  if (!FIREBASE_ENABLED || !auth) {
+    throw new Error('Firebase Authentication is not available.');
+  }
+
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!normalizedEmail) {
+    throw new Error("Veuillez saisir une adresse e-mail.");
+  }
+
+  await sendPasswordResetEmail(auth, normalizedEmail);
 }

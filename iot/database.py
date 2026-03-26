@@ -15,7 +15,15 @@ DB_PATH = Path(config.LOCAL_CACHE_DB)
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def _ensure_column(cur: sqlite3.Cursor, table: str, column: str, ddl: str) -> None:
+    info = cur.execute(f"PRAGMA table_info({table})").fetchall()
+    columns = {row[1] for row in info}
+    if column not in columns:
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
 
 
 def init_db() -> None:
@@ -27,6 +35,7 @@ def init_db() -> None:
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
+            email TEXT DEFAULT '',
             password_hash TEXT NOT NULL,
             role TEXT DEFAULT 'operator',
             department TEXT DEFAULT '',
@@ -87,15 +96,18 @@ def init_db() -> None:
         """
     )
 
+    _ensure_column(cur, "users", "email", "email TEXT DEFAULT ''")
+
     cur.execute("SELECT 1 FROM users WHERE username = ?", ("admin@bioguard.local",))
     if not cur.fetchone():
         cur.execute(
             """
-            INSERT INTO users (id, username, password_hash, role, department)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO users (id, username, email, password_hash, role, department)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 "admin-001",
+                "admin@bioguard.local",
                 "admin@bioguard.local",
                 generate_password_hash("Admin1234!", method="pbkdf2:sha256"),
                 "admin",
@@ -130,29 +142,72 @@ def init_db() -> None:
     conn.close()
 
 
-def upsert_user(user_id: str, username: str, password_hash: str, role: str, department: str = "") -> None:
+def upsert_user(
+    user_id: str,
+    username: str,
+    password_hash: str,
+    role: str,
+    department: str = "",
+    email: str = "",
+) -> None:
     conn = get_db_connection()
     conn.execute(
         """
-        INSERT INTO users (id, username, password_hash, role, department)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO users (id, username, email, password_hash, role, department)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             username = excluded.username,
+            email = excluded.email,
             password_hash = excluded.password_hash,
             role = excluded.role,
             department = excluded.department
         """,
-        (user_id, username, password_hash, role, department),
+        (user_id, username, email, password_hash, role, department),
     )
     conn.commit()
     conn.close()
+
+
+def update_user(user_id: str, username: str, role: str, department: str = "", email: str = "") -> None:
+    conn = get_db_connection()
+    conn.execute(
+        """
+        UPDATE users
+        SET username = ?, email = ?, role = ?, department = ?
+        WHERE id = ?
+        """,
+        (username, email, role, department, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_user(user_id: str) -> None:
+    conn = get_db_connection()
+    conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_user_by_id(user_id: str) -> dict | None:
+    conn = get_db_connection()
+    row = conn.execute(
+        """
+        SELECT id, username, email, role, department, created_at
+        FROM users
+        WHERE id = ?
+        """,
+        (user_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def list_users() -> list[dict]:
     conn = get_db_connection()
     rows = conn.execute(
         """
-        SELECT u.id, u.username, u.role, u.department, u.created_at,
+        SELECT u.id, u.username, u.email, u.role, u.department, u.created_at,
                CASE WHEN bp.user_id IS NULL THEN 0 ELSE 1 END AS has_biometrics
         FROM users u
         LEFT JOIN biometric_profiles bp ON bp.user_id = u.id

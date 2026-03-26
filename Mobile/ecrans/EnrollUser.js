@@ -9,11 +9,13 @@ import {
   TextInput,
   StatusBar,
   Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { COLORS, GRADIENTS } from '../theme';
+import { useMqttStore } from '../store/mqttStore';
 
 function CheckItem({ label, checked, onToggle }) {
   return (
@@ -35,15 +37,16 @@ function StatusIndicator({ label, active }) {
   );
 }
 
-import { useMqttStore } from '../store/mqttStore';
-import { Alert } from 'react-native';
-
-export default function EnrollUser({ navigation }) {
+export default function EnrollUser({ navigation, route }) {
   const { t } = useTranslation();
-  const [fullName, setFullName] = useState('John Doe');
-  const [employeeId, setEmployeeId] = useState('EMP-001');
-  const [email, setEmail] = useState('john.doe@corp.com');
-  const [department, setDepartment] = useState('Engineering');
+  const params = route?.params || {};
+  const mode = params.mode || 'create';
+  const editingUser = params.user || null;
+
+  const [fullName, setFullName] = useState(editingUser?.username || '');
+  const [employeeId, setEmployeeId] = useState(editingUser?.id || '');
+  const [email, setEmail] = useState(editingUser?.email || '');
+  const [department, setDepartment] = useState(editingUser?.department || '');
   const [notes, setNotes] = useState('');
 
   const [groupMain, setGroupMain] = useState(true);
@@ -54,6 +57,7 @@ export default function EnrollUser({ navigation }) {
 
   const isConnected = useMqttStore((state) => state.isConnected);
   const enrollUser = useMqttStore((state) => state.enrollUser);
+  const updateUser = useMqttStore((state) => state.updateUser);
 
   const handleCompleteEnrollment = async () => {
     if (!isConnected) {
@@ -66,23 +70,37 @@ export default function EnrollUser({ navigation }) {
       return;
     }
 
+    if (!fullName.trim() || !employeeId.trim() || !email.trim()) {
+      Alert.alert(t('common.error'), 'Nom, identifiant et e-mail sont obligatoires.');
+      return;
+    }
+
+    if (!String(email).includes('@')) {
+      Alert.alert(t('common.error'), "L'adresse e-mail n'est pas valide.");
+      return;
+    }
+
     try {
       const payload = {
-        user_id: employeeId,
-        username: fullName,
+        user_id: employeeId.trim(),
+        username: fullName.trim(),
         password: 'Temp1234!',
         role: groupAdmin ? 'admin' : 'operator',
-        email: email,
-        department: department,
+        email: email.trim(),
+        department: department.trim(),
         images: []
       };
 
-      await enrollUser(payload);
+      if (mode === 'edit') {
+        await updateUser(payload);
+      } else {
+        await enrollUser(payload);
+      }
       
       Alert.alert(
-        t('enrollment.enrollmentStartedTitle'),
-        t('enrollment.enrollmentStartedDesc'),
-        [{ text: t('common.ok'), onPress: () => navigation.navigate('UserManagement') }]
+        mode === 'edit' ? 'Utilisateur modifié' : t('enrollment.enrollmentStartedTitle'),
+        mode === 'edit' ? 'Les informations utilisateur ont été mises à jour.' : t('enrollment.enrollmentStartedDesc'),
+        [{ text: t('common.ok'), onPress: () => navigation.goBack() }]
       );
     } catch (err) {
       Alert.alert(t('common.error'), t('enrollment.enrollmentErrorDesc'));
@@ -98,7 +116,7 @@ export default function EnrollUser({ navigation }) {
         <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('enrollment.title')}</Text>
+        <Text style={styles.headerTitle}>{mode === 'edit' ? t('userManagement.editUser') : t('enrollment.title')}</Text>
         <View style={styles.spacer} />
       </View>
 
@@ -200,7 +218,7 @@ export default function EnrollUser({ navigation }) {
         <View style={styles.footer}>
           <TouchableOpacity style={styles.saveBtn} onPress={handleCompleteEnrollment}>
             <LinearGradient colors={GRADIENTS.neonCyan} style={styles.saveBtnInner}>
-              <Text style={styles.saveBtnText}>{t('enrollment.completeEnrollment').toUpperCase()}</Text>
+              <Text style={styles.saveBtnText}>{mode === 'edit' ? t('userManagement.editUser') : t('enrollment.completeEnrollment').toUpperCase()}</Text>
             </LinearGradient>
           </TouchableOpacity>
           <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation?.goBack()}>

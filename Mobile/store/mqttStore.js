@@ -23,6 +23,8 @@ export const useMqttStore = create((set, get) => ({
       set({ isConnected: true, status: 'ONLINE' });
       client.subscribe(responseTopic('auth/login', get().clientId));
       client.subscribe(responseTopic('users/list', get().clientId));
+      client.subscribe(responseTopic('users/update', get().clientId));
+      client.subscribe(responseTopic('users/delete', get().clientId));
       client.subscribe(responseTopic('access/logs', get().clientId));
       client.subscribe(responseTopic('audit/list', get().clientId));
       client.subscribe(responseTopic('access/scan', get().clientId));
@@ -107,6 +109,20 @@ export const useMqttStore = create((set, get) => ({
       MQTT_TOPICS.usersCmd,
       responseTopic('users/list', get().clientId),
       {}
+    ),
+
+  updateUser: async (payload) =>
+    get().request(
+      MQTT_TOPICS.usersUpdateCmd,
+      responseTopic('users/update', get().clientId),
+      payload
+    ),
+
+  deleteUser: async (userId) =>
+    get().request(
+      MQTT_TOPICS.usersDeleteCmd,
+      responseTopic('users/delete', get().clientId),
+      { user_id: userId }
     ),
 
   fetchLogs: async () =>

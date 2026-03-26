@@ -2,15 +2,14 @@
 
 Système IoT de contrôle d'accès biométrique multimodal basé sur Raspberry Pi, application mobile Expo, MQTT et Firebase.
 
-Le projet a été réorienté pour reconnaître une personne avec plusieurs sources biométriques et contextuelles :
+Le projet a été réorienté autour du matériel réellement disponible :
 
 - paume de la main
 - géométrie des doigts
-- capteur de proximité
-- capteur de contact / toucher
-- capteur de mouvement
+- capteur de lumière
+- caméra Raspberry Pi
 
-Les LEDs, le buzzer et l'écran LCD servent au retour utilisateur en temps réel pendant l'enrôlement et la décision d'accès.
+Les LEDs, le buzzer et l'écran LCD servent au retour utilisateur local. Les deux LED d’éclairage s’allument automatiquement quand la pièce devient sombre.
 
 ## Architecture
 
@@ -21,9 +20,7 @@ Utilisateur
    v
 Raspberry Pi
    |- Pi Camera -> extraction ORB + géométrie
-   |- Touch sensor -> validation de contact
-   |- Ultrasonic sensor -> présence devant le lecteur
-   |- PIR / motion -> activité autour de la porte
+   |- Light sensor -> détection de luminosité ambiante
    |- LCD + LEDs + buzzer -> feedback local
    |
    |- MQTT -> commandes et télémétrie temps réel
@@ -47,10 +44,14 @@ VeinGuard/
 ## Fonctionnalités
 
 - enrôlement d'un utilisateur depuis l'application mobile
+- modification et suppression d'utilisateurs via MQTT
 - capture biométrique sur Raspberry Pi
 - comparaison déterministe paume + doigts avec ORB + géométrie
-- feedback local par LCD, LED verte, LED rouge et buzzer
-- historique d'accès côté mobile
+- pilotage mobile du LCD, du buzzer, des LED et de l'éclairage
+- historique d'accès et journaux d'audit côté mobile
+- authentification Firebase email / mot de passe avec création de compte
+- session persistante optionnelle et préférences par utilisateur
+- listes mobiles en `FlatList` avec icônes
 - synchronisation des profils et événements vers Firebase
 - fonctionnement dégradé avec cache local SQLite si Internet tombe
 

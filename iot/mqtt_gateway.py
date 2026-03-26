@@ -57,6 +57,10 @@ class BioGuardMQTTGateway:
             self.handle_login_command(data)
         elif topic == config.MQTT_CMD_USERS:
             self.handle_users_list_command(data)
+        elif topic == config.MQTT_CMD_USERS_UPDATE:
+            self.handle_user_update_command(data)
+        elif topic == config.MQTT_CMD_USERS_DELETE:
+            self.handle_user_delete_command(data)
         elif topic == config.MQTT_CMD_LOGS:
             self.handle_logs_list_command(data)
         elif topic == config.MQTT_CMD_AUDIT:
@@ -160,11 +164,18 @@ class BioGuardMQTTGateway:
             password_hash=generate_password_hash(password, method="pbkdf2:sha256"),
             role=role,
             department=department,
+            email=data.get("email", ""),
         )
         database.save_biometric_profile(user_id, profile)
         self.firebase.save_user_profile(
             user_id,
-            {"username": username, "role": role, "department": department, "device_id": config.DEVICE_ID},
+            {
+                "username": username,
+                "email": data.get("email", ""),
+                "role": role,
+                "department": department,
+                "device_id": config.DEVICE_ID,
+            },
         )
         self.firebase.save_biometric_profile(user_id, profile)
         database.log_audit("INFO", "USER_ENROLLED", f"Profil multimodal cree pour {username}", user_id)
@@ -219,6 +230,75 @@ class BioGuardMQTTGateway:
         client_id = data.get("client_id", "anonymous")
         response_topic = config.response_topic("users/list", client_id)
         self.client.publish(response_topic, json.dumps(database.list_users()))
+
+    def handle_user_update_command(self, data: dict) -> None:
+        client_id = data.get("client_id", "anonymous")
+        response_topic = config.response_topic("users/update", client_id)
+        user_id = data.get("user_id")
+
+        if not user_id:
+            self.client.publish(response_topic, json.dumps({"status": "error", "error": "Missing user_id"}))
+            return
+
+        existing = database.get_user_by_id(user_id)
+        if not existing:
+            self.client.publish(response_topic, json.dumps({"status": "error", "error": "USER_NOT_FOUND"}))
+            return
+
+        username = data.get("username", existing["username"])
+        role = data.get("role", existing["role"])
+        department = data.get("department", existing["department"])
+        email = data.get("email", existing.get("email", ""))
+
+        database.update_user(user_id, username=username, role=role, department=department, email=email)
+        self.firebase.save_user_profile(
+            user_id,
+            {
+                "username": username,
+                "email": email,
+                "role": role,
+                "department": department,
+                "device_id": config.DEVICE_ID,
+            },
+        )
+        database.log_audit("INFO", "USER_UPDATED", f"Utilisateur {user_id} modifie", json.dumps(data))
+        self.client.publish(
+            response_topic,
+            json.dumps(
+                {
+                    "status": "success",
+                    "user": database.get_user_by_id(user_id),
+                }
+            ),
+        )
+
+    def handle_user_delete_command(self, data: dict) -> None:
+        client_id = data.get("client_id", "anonymous")
+        response_topic = config.response_topic("users/delete", client_id)
+        user_id = data.get("user_id")
+
+        if not user_id:
+            self.client.publish(response_topic, json.dumps({"status": "error", "error": "Missing user_id"}))
+            return
+
+        existing = database.get_user_by_id(user_id)
+        if not existing:
+            self.client.publish(response_topic, json.dumps({"status": "error", "error": "USER_NOT_FOUND"}))
+            return
+
+        database.delete_user(user_id)
+        self.firebase.delete_user_profile(user_id)
+        self.firebase.delete_biometric_profile(user_id)
+        database.log_audit("WARNING", "USER_DELETED", f"Utilisateur {user_id} supprime", user_id)
+        self.client.publish(
+            response_topic,
+            json.dumps(
+                {
+                    "status": "success",
+                    "deleted_user_id": user_id,
+                }
+            ),
+        )
 
     def handle_logs_list_command(self, data: dict) -> None:
         client_id = data.get("client_id", "anonymous")

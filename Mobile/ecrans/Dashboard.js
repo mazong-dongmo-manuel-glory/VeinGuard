@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { COLORS, GRADIENTS, SHADOWS } from '../theme';
-import { logoutFromFirebase } from '../services/auth';
+import { useAuthStore } from '../store/authStore';
 
 const devices = [
   {
@@ -130,6 +130,7 @@ export default function Dashboard({ navigation }) {
   
   const systemStatus = useMqttStore((state) => state.status);
   const isConnected = useMqttStore((state) => state.isConnected);
+  const logout = useAuthStore((state) => state.logout);
   const systemStatusLabel =
     systemStatus === 'ONLINE'
       ? t('dashboard.onlineStatus')
@@ -158,8 +159,7 @@ export default function Dashboard({ navigation }) {
           text: t('common.logout'), 
           style: "destructive",
           onPress: async () => {
-            await logoutFromFirebase();
-            if (navigation) navigation.navigate('Login');
+            await logout();
           }
         }
       ]
