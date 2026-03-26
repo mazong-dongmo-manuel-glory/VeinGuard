@@ -1493,7 +1493,8 @@ def verify_multiframe(frames_bgr: list[np.ndarray], stored_profile: dict[str, An
 
 
 def verify_identification_profile(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> dict[str, Any]:
-    sample_results = [verify_live_profile(sample, stored_profile) for sample in live_profile["samples"]]
+    live_samples = live_profile.get("samples") or []
+    sample_results = [verify_live_profile(sample, stored_profile) for sample in live_samples]
     fused_result = verify_live_profile(live_profile, stored_profile)
 
     ranked_results = sorted([fused_result, *sample_results], key=lambda item: item["score"])
@@ -1527,9 +1528,9 @@ def verify_identification_profile(live_profile: dict[str, Any], stored_profile: 
             "top_mean_score": round(top_mean, 4),
             "strategy": "0.25*fused + 0.55*best + 0.20*top_mean",
         },
-        "valid_sample_count": live_profile["sample_count"],
-        "captured_frame_count": live_profile["captured_frame_count"],
-        "rejected_samples": live_profile["rejected_samples"],
+        "valid_sample_count": live_profile.get("sample_count", max(len(live_samples), 1)),
+        "captured_frame_count": live_profile.get("captured_frame_count", max(len(live_samples), 1)),
+        "rejected_samples": live_profile.get("rejected_samples", []),
     }
 
 
