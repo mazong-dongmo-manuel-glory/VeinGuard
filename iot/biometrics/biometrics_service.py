@@ -757,7 +757,14 @@ def generate_biometric_key(profile: dict[str, Any]) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def _analyze_profile(frame_bgr: np.ndarray, mode: str = "scan") -> dict[str, Any]:
+def _analyze_profile(
+    frame_bgr: np.ndarray,
+    mode: str = "scan",
+    enforce_validation: bool | None = None,
+) -> dict[str, Any]:
+    if enforce_validation is None:
+        enforce_validation = mode != "enrollment"
+
     gray_frame = _preprocess_frame_gray(frame_bgr)
     hand_mask, contour = _pick_hand_contour(gray_frame)
     valleys = _find_finger_valleys(contour)
@@ -789,7 +796,7 @@ def _analyze_profile(frame_bgr: np.ndarray, mode: str = "scan") -> dict[str, Any
     }
     validation = _capture_validation(geometry, quality, mode=mode)
     quality["validation"] = validation
-    if not validation["valid"]:
+    if enforce_validation and not validation["valid"]:
         raise ValueError(f"Capture palmaire invalide: {validation['reason']}")
 
     profile = {
@@ -846,12 +853,20 @@ def _analyze_profile(frame_bgr: np.ndarray, mode: str = "scan") -> dict[str, Any
     }
 
 
-def build_multimodal_profile(frame_bgr: np.ndarray, mode: str = "scan") -> dict[str, Any]:
-    return _analyze_profile(frame_bgr, mode=mode)["profile"]
+def build_multimodal_profile(
+    frame_bgr: np.ndarray,
+    mode: str = "scan",
+    enforce_validation: bool | None = None,
+) -> dict[str, Any]:
+    return _analyze_profile(frame_bgr, mode=mode, enforce_validation=enforce_validation)["profile"]
 
 
-def analyze_hand_frame(frame_bgr: np.ndarray, mode: str = "scan") -> dict[str, Any]:
-    return _analyze_profile(frame_bgr, mode=mode)
+def analyze_hand_frame(
+    frame_bgr: np.ndarray,
+    mode: str = "scan",
+    enforce_validation: bool | None = None,
+) -> dict[str, Any]:
+    return _analyze_profile(frame_bgr, mode=mode, enforce_validation=enforce_validation)
 
 
 def _mean_numeric(values: list[float | int]) -> float:
@@ -959,7 +974,7 @@ def build_enrollment_profile(frames_bgr: list[np.ndarray]) -> dict[str, Any]:
     rejected_samples = []
     for index, frame in enumerate(frames_bgr, start=1):
         try:
-            samples.append(build_multimodal_profile(frame, mode="enrollment"))
+            samples.append(build_multimodal_profile(frame, mode="enrollment", enforce_validation=False))
         except Exception as exc:
             rejected_samples.append({"sample_index": index, "reason": str(exc)})
 

@@ -288,7 +288,7 @@ class BioGuardMQTTGateway:
                 capture = self.controller.capture_attempt(
                     claimed_user_id=user_id,
                     profile_mode="enrollment",
-                    precompute_profile=True,
+                    precompute_profile=False,
                     activate_mode=False,
                 )
                 frames.append(capture["frame"])
