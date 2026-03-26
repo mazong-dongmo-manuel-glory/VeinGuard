@@ -20,8 +20,8 @@
     "offline": "OFFLINE"
   },
   "login": {
-    "title": "VEIN GUARD",
-    "subtitle": "BIOMETRIC ACCESS CONTROL",
+    "title": "BIOGUARD ACCESS",
+    "subtitle": "MULTIMODAL BIOMETRIC ACCESS CONTROL",
     "emailLabel": "EMAIL ADDRESS",
     "emailPlaceholder": "your.email@example.com",
     "passwordLabel": "PASSWORD",
@@ -29,19 +29,19 @@
     "domainLabel": "DOMAIN",
     "showPassword": "Show password",
     "loginBtn": "🔑 CREDENTIAL ACCESS",
-    "veinBtn": "✋ VEIN SCAN ACCESS",
+    "veinBtn": "✋ MULTIMODAL SCAN ACCESS",
     "rememberMe": "Remember me",
     "forgotPassword": "Forgot password?",
     "mqttBadge": "MQTT ONLINE",
-    "footer": "© 2024 VeinGuard Systems. All Rights Reserved.",
+    "footer": "© 2026 BioGuard Access. All rights reserved.",
     "orQuickAccess": "OR QUICK ACCESS",
     "biometricLogin": "〜 BIOMETRIC LOGIN",
     "adminDomain": "ADMIN DOMAIN",
     "accessSystem": "→) ACCESS SYSTEM"
   },
   "dashboard": {
-    "title": "ESP32 DEVICE STATUS",
-    "subtitle": "Real-time biometric scanner monitoring",
+    "title": "RASPBERRY PI SYSTEM STATUS",
+    "subtitle": "Real-time monitoring of biometric nodes and access events",
     "status": "STATUS",
     "devices": "DEVICES",
     "primaryScanner": "PRIMARY SCANNER",
@@ -62,13 +62,13 @@
     "systemStatus": "SYSTEM STATUS",
     "operational": "OPERATIONAL",
     "connected": "CONNECTED",
-    "startVeinScan": "START VEIN SCAN",
+    "startVeinScan": "START BIOMETRIC SCAN",
     "viewHistory": "VIEW HISTORY",
     "quickActions": "QUICK ACTIONS",
     "securityAlert": "Security Alert Detected",
     "securityAlertDesc": "Multiple failed biometric attempts",
     "manageUsers": "MANAGE USERS",
-    "dropdownLabel": "Dashboard (ESP32 Status)"
+    "dropdownLabel": "Dashboard (Raspberry Pi Status)"
   },
   "systemSettings": {
     "title": "SYSTEM SETTINGS",
@@ -92,10 +92,10 @@
     "topicResult": "Scan result messages",
     "topicEnroll": "User enrollment events",
     "topicTelemetry": "Device telemetry and diagnostics",
-    "esp32Management": "ESP32 DEVICE MANAGEMENT",
+    "esp32Management": "RASPBERRY PI NODE MANAGEMENT",
     "appSecurity": "APP SECURITY",
     "biometricLogin": "Biometric Login",
-    "biometricDesc": "Use fingerprint or face to unlock app",
+    "biometricDesc": "Use the phone's local biometrics to unlock the app",
     "autoLock": "Auto Lock",
     "autoLockDesc": "Lock on",
     "sessionTimeout": "SESSION TIMEOUT (MIN)",
@@ -134,11 +134,11 @@
     "accessGroups": "ACCESS GROUPS",
     "notes": "NOTES",
     "enrollStep1": "1. Basic Information",
-    "enrollStep2": "2. Vein Enrollment",
+    "enrollStep2": "2. Palm / finger enrollment",
     "enrollStep3": "3. Verification",
     "startEnrollment": "Start Enrollment",
     "nextStep": "Next Step",
-    "scanVein": "Scan Vein",
+    "scanVein": "Scan Palm",
     "scanQuality": "Scan Quality",
     "retakeScan": "Retake Scan",
     "enrollmentComplete": "Enrollment Complete",
@@ -148,7 +148,7 @@
     "completeEnrollment": "✓ COMPLETE ENROLLMENT",
     "cancelBtn": "✕ CANCEL",
     "userProfile": "👥 USER PROFILE",
-    "veinCapture": "✋ VEIN CAPTURE",
+    "veinCapture": "✋ MULTIMODAL CAPTURE",
     "enrollmentStatus": "📶 ENROLLMENT STATUS",
     "dropdownLabel": "User Management (Roles/List)",
     "consentTitle": "Biometric Consent",
@@ -160,7 +160,7 @@
   },
   "accessHistory": {
     "title": "ACCESS HISTORY",
-    "subtitle": "Detailed biometric access event log",
+    "subtitle": "Detailed multimodal biometric access event log",
     "timestamp": "TIMESTAMP",
     "user": "USER",
     "door": "DOOR",
@@ -212,7 +212,7 @@
     "viewEventDetails": "ℹ  VIEW EVENT DETAILS",
     "retryScan": "↻  RETRY SCAN",
     "reportIssue": "📋 REPORT ISSUE",
-    "dropdownLabel": "Dashboard (ESP32 Status)"
+    "dropdownLabel": "Dashboard (Raspberry Pi Status)"
   },
   "auditLogs": {
     "title": "ADMIN AUDIT LOGS",
@@ -271,8 +271,8 @@
     "dropdownLabel": "User Management (Roles/List)"
   },
   "veinScan": {
-    "title": "BIOMETRIC SCANNER HUD",
-    "subtitle": "Position hand over scanner for vein pattern capture",
+    "title": "MULTIMODAL SCAN",
+    "subtitle": "Position the palm and align the fingers on the scanner",
     "quality": "QUALITY",
     "brightness": "BRIGHTNESS",
     "contrast": "CONTRAST",
@@ -308,7 +308,7 @@
     "userIdPlaceholder": "Enter User ID for testing",
     "testAccess": "TEST ACCESS",
     "privacyTitle": "Privacy Notice",
-    "privacyText": "Biometric data is processed locally and encrypted before transmission. No vein patterns are stored permanently. All scan data is automatically purged after authentication.",
-    "dropdownLabel": "Vein Scan (Biometric HUD)"
+    "privacyText": "Biometric data is processed on the Raspberry Pi and securely synchronized to Firebase for history and administration. Raw images are not used as the primary long-term authentication source.",
+    "dropdownLabel": "Multimodal scan (biometric HUD)"
   }
 }

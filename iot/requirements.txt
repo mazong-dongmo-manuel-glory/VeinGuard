@@ -1,5 +1,10 @@
-opencv-python-headless
+firebase-admin
+gpiozero
 numpy
-scikit-image
-Werkzeug
+opencv-python-headless
 paho-mqtt
+picamera2
+RPLCD
+scikit-image
+smbus2
+Werkzeug

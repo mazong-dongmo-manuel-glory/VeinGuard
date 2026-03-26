@@ -79,6 +79,7 @@ function DeviceCard({ name, status, firmware, uptime, signal }) {
 }
 
 import { useMqttStore } from '../store/mqttStore';
+import { MQTT_TOPICS } from '../config';
 import { Alert } from 'react-native';
 
 export default function SystemSetting({ navigation }) {
@@ -106,8 +107,8 @@ export default function SystemSetting({ navigation }) {
       timestamp: Date.now()
     };
 
-    client.publish('veinguard/cmd/settings/update', JSON.stringify(config));
-    Alert.alert("Configuration Transmitted", "System core settings have been updated across the cluster.");
+    client.publish(MQTT_TOPICS.settingsCmd, JSON.stringify(config));
+    Alert.alert("Configuration transmise", "Les paramètres du système ont été envoyés au Raspberry Pi.");
   };
 
   return (
@@ -149,8 +150,8 @@ export default function SystemSetting({ navigation }) {
         <View style={styles.card}>
           <SectionHeader icon="hardware-chip-outline" title="Active Nodes" color={COLORS.neonAmber} />
           <View style={styles.cardContent}>
-            <DeviceCard name="VEIN-ESP-01" status="Online" firmware="v3.1.2" uptime="12d 4h" signal="-65dBm" />
-            <DeviceCard name="VEIN-ESP-02" status="Warning" firmware="v3.0.1" uptime="45m" signal="-82dBm" />
+            <DeviceCard name="BG-RPI-01" status="Online" firmware="v3.1.2" uptime="12d 4h" signal="-65dBm" />
+            <DeviceCard name="BG-NODE-02" status="Warning" firmware="v3.0.1" uptime="45m" signal="-82dBm" />
             <TouchableOpacity style={styles.addBtn}>
               <Ionicons name="add" size={20} color={COLORS.neonAmber} />
               <Text style={styles.addBtnText}>PROVISION NEW NODE</Text>

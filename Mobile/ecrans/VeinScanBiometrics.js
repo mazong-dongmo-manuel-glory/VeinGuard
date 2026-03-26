@@ -53,6 +53,7 @@ function QualityBar({ label, value, color }) {
 
 import { useMqttStore } from '../store/mqttStore';
 import { Alert } from 'react-native';
+import { MQTT_TOPICS } from '../config';
 
 export default function VeinScanBiometrics({ navigation }) {
   const { t } = useTranslation();
@@ -61,7 +62,7 @@ export default function VeinScanBiometrics({ navigation }) {
   const scanLineAnim = useRef(new Animated.Value(0)).current;
 
   const isConnected = useMqttStore((state) => state.isConnected);
-  const client = useMqttStore((state) => state.client);
+  const triggerScan = useMqttStore((state) => state.triggerScan);
 
   useEffect(() => {
     if (scanning) {
@@ -78,18 +79,17 @@ export default function VeinScanBiometrics({ navigation }) {
 
   const handleScanToggle = () => {
     if (!isConnected) {
-        Alert.alert("System Offline", "Unable to communicate with security gateway.");
+        Alert.alert("Système hors ligne", "Impossible de joindre la passerelle Raspberry Pi.");
         return;
     }
 
     if (!scanning) {
-        // Trigger scan on hardware
-        client.publish('veinguard/cmd/scan', JSON.stringify({ 
-            client_id: 'MOBILE_APP',
-            user_id: userId || 'anonymous'
-        }));
+        triggerScan(userId || 'demo-user').catch(() => {
+          setScanning(false);
+          Alert.alert("Erreur", "Le scan biométrique n'a pas pu être lancé.");
+        });
         setScanning(true);
-        Alert.alert("Hardware Triggered", "The biometric sensor is now live. Please place your hand on the scanner.");
+        Alert.alert("Scan lancé", "Place la paume et aligne bien les doigts sur le dispositif.");
     } else {
         setScanning(false);
     }
@@ -123,7 +123,7 @@ export default function VeinScanBiometrics({ navigation }) {
               <View style={[styles.recDot, !scanning && { backgroundColor: COLORS.textDim }]} />
               <Text style={[styles.recText, !scanning && { color: COLORS.textDim }]}>{scanning ? 'LIVE FEED' : 'STANDBY'}</Text>
             </View>
-            <Text style={styles.scannerId}>SENSOR: VS-ALPHA-01</Text>
+            <Text style={styles.scannerId}>SENSOR: BG-MULTI-01</Text>
           </View>
 
           <View style={styles.scannerFrame}>
@@ -165,7 +165,7 @@ export default function VeinScanBiometrics({ navigation }) {
 
             <View style={styles.frameFooter}>
               <Text style={styles.frameMeta}>COORD: 42.0 // 18.5</Text>
-              <Text style={styles.frameMeta}>IR-GAIN: +12dB</Text>
+              <Text style={styles.frameMeta}>MQTT: {MQTT_TOPICS.scanCmd}</Text>
             </View>
           </View>
 

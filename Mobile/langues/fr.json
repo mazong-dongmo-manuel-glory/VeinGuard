@@ -20,8 +20,8 @@
     "offline": "HORS LIGNE"
   },
   "login": {
-    "title": "VEIN GUARD",
-    "subtitle": "CONTRÔLE D'ACCÈS BIOMÉTRIQUE",
+    "title": "BIOGUARD ACCESS",
+    "subtitle": "CONTRÔLE D'ACCÈS BIOMÉTRIQUE MULTIMODAL",
     "emailLabel": "ADRESSE E-MAIL",
     "emailPlaceholder": "votre.email@example.com",
     "passwordLabel": "MOT DE PASSE",
@@ -29,19 +29,19 @@
     "domainLabel": "DOMAINE",
     "showPassword": "Afficher le mot de passe",
     "loginBtn": "🔑 ACCÈS PAR IDENTIFIANTS",
-    "veinBtn": "✋ ACCÈS PAR SCAN VEINEUX",
+    "veinBtn": "✋ ACCÈS PAR SCAN MULTIMODAL",
     "rememberMe": "Se souvenir de moi",
     "forgotPassword": "Mot de passe oublié?",
     "mqttBadge": "MQTT EN LIGNE",
-    "footer": "© 2024 VeinGuard Systems. Tous les droits réservés.",
+    "footer": "© 2026 BioGuard Access. Tous les droits réservés.",
     "orQuickAccess": "OU ACCÈS RAPIDE",
     "biometricLogin": "〜 CONNEXION BIOMÉTRIQUE",
     "adminDomain": "DOMAINE ADMIN",
     "accessSystem": "→) ACCÉDER AU SYSTÈME"
   },
   "dashboard": {
-    "title": "STATUT APPAREIL ESP32",
-    "subtitle": "Surveillance en temps réel des scanners biométriques",
+    "title": "STATUT DU SYSTÈME RASPBERRY PI",
+    "subtitle": "Surveillance en temps réel des nœuds biométriques et des accès",
     "status": "STATUT",
     "devices": "APPAREILS",
     "primaryScanner": "SCANNER PRINCIPAL",
@@ -62,13 +62,13 @@
     "systemStatus": "STATUT DU SYSTÈME",
     "operational": "OPÉRATIONNEL",
     "connected": "CONNECTÉ",
-    "startVeinScan": "LANCER LE SCAN VEINEUX",
+    "startVeinScan": "LANCER LE SCAN BIOMÉTRIQUE",
     "viewHistory": "VOIR L'HISTORIQUE",
     "quickActions": "ACTIONS RAPIDES",
     "securityAlert": "Alerte de sécurité détectée",
     "securityAlertDesc": "Plusieurs tentatives biométriques échouées",
     "manageUsers": "GÉRER LES UTILISATEURS",
-    "dropdownLabel": "Tableau de bord (Statut ESP32)"
+    "dropdownLabel": "Tableau de bord (Statut Raspberry Pi)"
   },
   "systemSettings": {
     "title": "PARAMÈTRES SYSTÈME",
@@ -92,10 +92,10 @@
     "topicResult": "Messages des résultats de scan",
     "topicEnroll": "Événements d'inscription d'utilisateur",
     "topicTelemetry": "Télémétrie et diagnostics des appareils",
-    "esp32Management": "GESTION DES APPAREILS ESP32",
+    "esp32Management": "GESTION DES NŒUDS RASPBERRY PI",
     "appSecurity": "SÉCURITÉ DE L'APPLICATION",
     "biometricLogin": "Connexion biométrique",
-    "biometricDesc": "Utiliser l'empreinte digitale ou le visage pour déverrouiller l'app",
+    "biometricDesc": "Utiliser la biométrie locale du téléphone pour déverrouiller l'app",
     "autoLock": "Verrouillage automatique",
     "autoLockDesc": "Verrouiller sur",
     "sessionTimeout": "DÉLAI D'EXPIRATION DE SESSION (MIN)",
@@ -134,11 +134,11 @@
     "accessGroups": "GROUPES D'ACCÈS",
     "notes": "NOTES",
     "enrollStep1": "1. Informations de base",
-    "enrollStep2": "2. Enregistrement des veines",
+    "enrollStep2": "2. Enregistrement paume / doigts",
     "enrollStep3": "3. Vérification",
     "startEnrollment": "Commencer l'enregistrement",
     "nextStep": "Étape suivante",
-    "scanVein": "Scannez la veine",
+    "scanVein": "Scannez la paume et les doigts",
     "scanQuality": "Qualité du scan",
     "retakeScan": "Reprendre le scan",
     "enrollmentComplete": "Enregistrement terminé",
@@ -148,7 +148,7 @@
     "completeEnrollment": "✓ TERMINER L'ENREGISTREMENT",
     "cancelBtn": "✕ ANNULER",
     "userProfile": "👥 PROFIL UTILISATEUR",
-    "veinCapture": "✋ CAPTURE VEINEUX",
+    "veinCapture": "✋ CAPTURE MULTIMODALE",
     "enrollmentStatus": "📶 STATUT D'ENREGISTREMENT",
     "dropdownLabel": "Gestion des utilisateurs (Rôles/Liste)",
     "consentTitle": "Consentement biométrique",
@@ -160,7 +160,7 @@
   },
   "accessHistory": {
     "title": "HISTORIQUE D'ACCÈS",
-    "subtitle": "Journal détaillé des événements d'accès biométrique",
+    "subtitle": "Journal détaillé des événements d'accès biométrique multimodal",
     "timestamp": "HORODATAGE",
     "user": "UTILISATEUR",
     "door": "PORTE",
@@ -212,7 +212,7 @@
     "viewEventDetails": "ℹ  VOIR LES DÉTAILS DE L'ÉVÉNEMENT",
     "retryScan": "↻  REPRENDRE LE SCAN",
     "reportIssue": "📋 SIGNALER UN PROBLÈME",
-    "dropdownLabel": "Tableau de bord (Statut ESP32)"
+    "dropdownLabel": "Tableau de bord (Statut Raspberry Pi)"
   },
   "auditLogs": {
     "title": "JOURNAUX D'AUDIT ADMIN",
@@ -271,8 +271,8 @@
     "dropdownLabel": "Gestion des utilisateurs (Rôles/Liste)"
   },
   "veinScan": {
-    "title": "ÉCRAN SCANNER BIOMÉTRIQUE",
-    "subtitle": "Positionnez la main sur le scanner pour capturer le motif veineux",
+    "title": "SCAN MULTIMODAL",
+    "subtitle": "Positionnez la paume et alignez les doigts sur le scanner",
     "quality": "QUALITÉ",
     "brightness": "LUMINOSITÉ",
     "contrast": "CONTRASTE",
@@ -308,7 +308,7 @@
     "userIdPlaceholder": "Entrez un ID utilisateur pour tester",
     "testAccess": "TESTER L'ACCÈS",
     "privacyTitle": "Avis de confidentialité",
-    "privacyText": "Les données biométriques sont traitées localement et chiffrées avant transmission. Aucun motif veineux n'est stocké de façon permanente. Toutes les données de scan sont automatiquement purgées après authentification.",
-    "dropdownLabel": "Scan Veineux (HUD Biométrique)"
+    "privacyText": "Les données biométriques sont traitées sur le Raspberry Pi, puis synchronisées de manière sécurisée vers Firebase pour l’historique et l’administration. Les images brutes ne sont pas conservées comme source principale d’authentification.",
+    "dropdownLabel": "Scan multimodal (HUD biométrique)"
   }
 }

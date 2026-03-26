@@ -1,37 +1,90 @@
-# VeinGuard 🔐
+# BioGuard Access
 
-**Système de contrôle d'accès biométrique intelligent basé sur la reconnaissance de veines.**
+Système IoT de contrôle d'accès biométrique multimodal basé sur Raspberry Pi, application mobile Expo, MQTT et Firebase.
 
-VeinGuard est un projet IoT intégrant une application mobile React Native, un backend Node.js, et un microcontrôleur ESP32 pour sécuriser l'accès à des zones restreintes via la biométrie veineuse.
+Le projet a été réorienté pour reconnaître une personne avec plusieurs sources biométriques et contextuelles :
 
----
+- paume de la main
+- géométrie des doigts
+- capteur de proximité
+- capteur de contact / toucher
+- capteur de mouvement
 
-## Structure du projet
+Les LEDs, le buzzer et l'écran LCD servent au retour utilisateur en temps réel pendant l'enrôlement et la décision d'accès.
 
+## Architecture
+
+```text
+Utilisateur
+   |
+   | paume / doigts
+   v
+Raspberry Pi
+   |- Pi Camera -> extraction ORB + géométrie
+   |- Touch sensor -> validation de contact
+   |- Ultrasonic sensor -> présence devant le lecteur
+   |- PIR / motion -> activité autour de la porte
+   |- LCD + LEDs + buzzer -> feedback local
+   |
+   |- MQTT -> commandes et télémétrie temps réel
+   |- SQLite -> cache edge et mode hors ligne
+   |- Firebase -> profils, événements, historique, admin
+   |- Firebase Authentication -> connexion mobile email / mot de passe
+   v
+Application mobile React Native (Expo)
 ```
+
+## Dossiers
+
+```text
 VeinGuard/
-├── Mobile/          # Application mobile React Native (Expo)
-├── iot/             # Algorithme de reconnaissance veineuse (Python / ESP32)
-└── Maquettes/       # Maquettes UI de l'application
+├── Mobile/   # Application mobile Expo / React Native
+├── iot/      # Passerelle Raspberry Pi, biométrie, capteurs, MQTT, Firebase
+├── Maquettes/
+└── docs/     # Documentation académique et projet
 ```
 
----
+## Fonctionnalités
 
-## Mobile – Application React Native
+- enrôlement d'un utilisateur depuis l'application mobile
+- capture biométrique sur Raspberry Pi
+- comparaison déterministe paume + doigts avec ORB + géométrie
+- feedback local par LCD, LED verte, LED rouge et buzzer
+- historique d'accès côté mobile
+- synchronisation des profils et événements vers Firebase
+- fonctionnement dégradé avec cache local SQLite si Internet tombe
 
-Application mobile permettant de :
-- S'authentifier (compte utilisateur)
-- Simuler un scan biométrique de veine
-- Communiquer avec l'ESP32 via MQTT
-- Consulter l'historique des accès
-- Gérer les utilisateurs autorisés (CRUD)
+## Stack
 
-### Stack
-- **React Native** (Expo)
-- **MQTT** – communication avec l'ESP32
-- **AsyncStorage** – stockage local des paramètres
+### IoT
 
-### Lancer l'application
+- Python
+- OpenCV
+- gpiozero / RPi.GPIO
+- paho-mqtt
+- Firebase Admin SDK
+- Picamera2
+
+### Mobile
+
+- React Native / Expo
+- Zustand
+- MQTT
+- Firebase Web SDK
+
+## Lancement
+
+### IoT
+
+```bash
+cd iot
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python mqtt_gateway.py
+```
+
+### Mobile
 
 ```bash
 cd Mobile
@@ -39,62 +92,9 @@ npm install
 npm start
 ```
 
----
+Configurer ensuite les variables `EXPO_PUBLIC_FIREBASE_*` côté mobile et les variables `VG_FIREBASE_*` côté Raspberry Pi.
 
-## IoT – Algorithme PBBM (Python)
+## Documents
 
-Implémentation Python du **Personalized Best Bit Map (PBBM)** pour la reconnaissance biométrique veineuse.
-
-### Fichiers principaux
-| Fichier | Description |
-|---|---|
-| `pbbm.py` | Algorithme principal PBBM |
-| `batch_eval_pbbm.py` | Évaluation batch du modèle |
-
-> ⚠️ **Dataset non inclus** – Les images biométriques (`data/`) ne sont pas versionnées pour des raisons de taille et de confidentialité.
-
-### Lancer l'évaluation
-
-```bash
-cd iot
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt   # à créer selon vos dépendances
-python batch_eval_pbbm.py
-```
-
----
-
-## Architecture du système
-
-```
-Utilisateur
-    │
-Application Mobile (React Native)
-    │
-API Backend (Node.js / Express)
-    │
-MQTT Broker
-    │
-ESP32
-    │
-Servo moteur → Ouverture de porte
-```
-
----
-
-## Matériel requis
-
-| Composant | Prix |
-|---|---|
-| ESP32 | ~7$ |
-| Capteur IR | ~20$ |
-| Servo moteur | ~5$ |
-| Boîtier | ~10$ |
-| **Total** | **~42$** |
-
----
-
-## Contributeurs
-
-Projet réalisé dans le cadre d'un cours d'IoT.
+- Documentation projet : [docs/Documentation_Projet_BioGuard.md](/Users/mazong/Documents/GitHub/VeinGuard/docs/Documentation_Projet_BioGuard.md)
+- README IoT : [iot/README.md](/Users/mazong/Documents/GitHub/VeinGuard/iot/README.md)

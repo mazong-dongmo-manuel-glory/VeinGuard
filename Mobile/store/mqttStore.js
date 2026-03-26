@@ -1,12 +1,7 @@
 import { create } from 'zustand';
 import mqtt from 'mqtt';
-import { MQTT_BROKER_URL } from '../config';
+import { MQTT_BROKER_URL, MQTT_TOPICS, responseTopic } from '../config';
 
-/**
- * Global MQTT Store for VeinGuard.
- * Manages a persistent singleton connection and provides
- * request-response utilities for Login and User Management.
- */
 export const useMqttStore = create((set, get) => ({
   client: null,
   isConnected: false,
@@ -16,7 +11,6 @@ export const useMqttStore = create((set, get) => ({
   connect: () => {
     if (get().client) return;
 
-    console.log('Connecting to MQTT:', MQTT_BROKER_URL);
     const client = mqtt.connect(MQTT_BROKER_URL, {
       clientId: get().clientId,
       clean: true,
@@ -24,38 +18,34 @@ export const useMqttStore = create((set, get) => ({
     });
 
     client.on('connect', () => {
-      console.log('MQTT Connected');
       set({ isConnected: true, status: 'ONLINE' });
-      
-      // Subscribe to personal response topics
-      client.subscribe(`veinguard/res/auth/login/${get().clientId}`);
-      client.subscribe(`veinguard/res/users/list/${get().clientId}`);
-      client.subscribe('veinguard/status');
+      client.subscribe(responseTopic('auth/login', get().clientId));
+      client.subscribe(responseTopic('users/list', get().clientId));
+      client.subscribe(responseTopic('access/logs', get().clientId));
+      client.subscribe(responseTopic('audit/list', get().clientId));
+      client.subscribe(responseTopic('access/scan', get().clientId));
+      client.subscribe(responseTopic('users/enroll', get().clientId));
+      client.subscribe(MQTT_TOPICS.status);
     });
 
-    client.on('message', (topic, payload) => {
-      const message = payload.toString();
-      console.log(`MQTT Received [${topic}]:`, message);
+    client.on('message', (topicName, payload) => {
+      if (topicName !== MQTT_TOPICS.status) return;
 
-      if (topic === 'veinguard/status') {
-        try {
-          const data = JSON.parse(message);
-          set({ status: data.status || 'ONLINE' });
-        } catch (e) {}
+      try {
+        const data = JSON.parse(payload.toString());
+        set({ status: data.status || 'ONLINE' });
+      } catch {
+        set({ status: 'ONLINE' });
       }
     });
 
-    client.on('close', () => set({ isConnected: false, status: 'OFFLINE' }));
-    client.on('error', (err) => console.error('MQTT Error:', err));
+    client.on('close', () => set({ isConnected: false, status: 'OFFLINE', client: null }));
+    client.on('error', () => set({ isConnected: false, status: 'ERROR' }));
 
     set({ client });
   },
 
-  /**
-   * Helper to perform a Request-Response cycle over MQTT.
-   * Useful for Login and List operations.
-   */
-  request: async (cmdTopic, resTopic, payload, timeout = 5000) => {
+  request: async (cmdTopic, resTopic, payload, timeout = 7000) => {
     const { client } = get();
     if (!client || !get().isConnected) {
       throw new Error('MQTT not connected');
@@ -64,58 +54,71 @@ export const useMqttStore = create((set, get) => ({
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         client.removeListener('message', handler);
-        reject(new Error('MQTT Timeout'));
+        reject(new Error('MQTT timeout'));
       }, timeout);
 
-      const handler = (topic, msg) => {
-        if (topic === resTopic) {
-          clearTimeout(timer);
-          client.removeListener('message', handler);
-          try {
-            resolve(JSON.parse(msg.toString()));
-          } catch (e) {
-            resolve(msg.toString());
-          }
+      const handler = (topicName, msg) => {
+        if (topicName !== resTopic) return;
+        clearTimeout(timer);
+        client.removeListener('message', handler);
+        try {
+          resolve(JSON.parse(msg.toString()));
+        } catch {
+          resolve(msg.toString());
         }
       };
 
       client.on('message', handler);
-      client.publish(cmdTopic, JSON.stringify({
-        ...payload,
-        client_id: get().clientId
-      }));
+      client.publish(
+        cmdTopic,
+        JSON.stringify({
+          ...payload,
+          client_id: get().clientId,
+        })
+      );
     });
   },
 
-  login: async (username, password) => {
-    return get().request(
-      'veinguard/cmd/auth/login',
-      `veinguard/res/auth/login/${get().clientId}`,
+  login: async (username, password) =>
+    get().request(
+      MQTT_TOPICS.loginCmd,
+      responseTopic('auth/login', get().clientId),
       { username, password }
-    );
-  },
+    ),
 
-  fetchUsers: async () => {
-    return get().request(
-      'veinguard/cmd/users/list',
-      `veinguard/res/users/list/${get().clientId}`,
+  fetchUsers: async () =>
+    get().request(
+      MQTT_TOPICS.usersCmd,
+      responseTopic('users/list', get().clientId),
       {}
-    );
-  },
+    ),
 
-  fetchLogs: async () => {
-    return get().request(
-      'veinguard/cmd/logs/list',
-      `veinguard/res/logs/list/${get().clientId}`,
+  fetchLogs: async () =>
+    get().request(
+      MQTT_TOPICS.logsCmd,
+      responseTopic('access/logs', get().clientId),
       {}
-    );
-  },
+    ),
 
-  fetchAuditLogs: async () => {
-    return get().request(
-      'veinguard/cmd/audit/list',
-      `veinguard/res/audit/list/${get().clientId}`,
+  fetchAuditLogs: async () =>
+    get().request(
+      MQTT_TOPICS.auditCmd,
+      responseTopic('audit/list', get().clientId),
       {}
-    );
-  }
+    ),
+
+  triggerScan: async (userId) =>
+    get().request(
+      MQTT_TOPICS.scanCmd,
+      responseTopic('access/scan', get().clientId),
+      { user_id: userId }
+    ),
+
+  enrollUser: async (payload) =>
+    get().request(
+      MQTT_TOPICS.enrollCmd,
+      responseTopic('users/enroll', get().clientId),
+      payload
+    ),
 }));
+

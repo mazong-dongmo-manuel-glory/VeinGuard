@@ -8,44 +8,39 @@ from .base import Actuator
 logger = logging.getLogger(__name__)
 
 try:
-    from gpiozero import LED as GpioZeroLED
+    from gpiozero import Buzzer as GpioZeroBuzzer
 except ImportError:
-    GpioZeroLED = None
+    GpioZeroBuzzer = None
 
 
-class StatusLED(Actuator):
-    def __init__(self, pin: int, name: str = "LED"):
+class Buzzer(Actuator):
+    def __init__(self, pin: int):
         self.pin = pin
-        self.name = name
-        self.state = False
         self._device = None
-
-        if GpioZeroLED is not None:
+        if GpioZeroBuzzer is not None:
             try:
-                self._device = GpioZeroLED(pin)
+                self._device = GpioZeroBuzzer(pin)
             except Exception as exc:
-                logger.warning("LED %s unavailable on pin %s: %s", name, pin, exc)
+                logger.warning("Buzzer unavailable on pin %s: %s", pin, exc)
 
     def on(self) -> None:
-        self.state = True
         if self._device is not None:
             self._device.on()
         else:
-            logger.info("[MOCK][%s] ON", self.name)
+            logger.info("[MOCK][BUZZER] ON")
 
     def off(self) -> None:
-        self.state = False
         if self._device is not None:
             self._device.off()
         else:
-            logger.info("[MOCK][%s] OFF", self.name)
+            logger.info("[MOCK][BUZZER] OFF")
 
-    def blink(self, count: int = 3, period: float = 0.2) -> None:
+    def beep(self, count: int = 3, on_time: float = 0.3, off_time: float = 0.3) -> None:
         for _ in range(count):
             self.on()
-            time.sleep(period)
+            time.sleep(on_time)
             self.off()
-            time.sleep(period)
+            time.sleep(off_time)
 
     def close(self) -> None:
         if self._device is not None:

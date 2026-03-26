@@ -1,4 +1,4 @@
-// Centralized Design Tokens for VeinGuard Mobile Application
+// Centralized design tokens for BioGuard Access mobile application.
 // This allows for global theme switching and prevents duplicated color definitions across screens.
 
 export const COLORS = {

@@ -16,11 +16,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { COLORS, GRADIENTS, SHADOWS } from '../theme';
+import { logoutFromFirebase } from '../services/auth';
 
 const devices = [
   {
-    id: 'ESP32-01',
-    role: 'PRIMARY SCANNER',
+    id: 'BG-RPI-01',
+    role: 'PRIMARY ACCESS HUB',
     status: 'ONLINE',
     statusColor: COLORS.neonGreen,
     heartbeat: '2s ago',
@@ -29,8 +30,8 @@ const devices = [
     firmware: 'v2.4.1',
   },
   {
-    id: 'ESP32-02',
-    role: 'SECONDARY SCANNER',
+    id: 'BG-NODE-02',
+    role: 'SECONDARY SENSOR NODE',
     status: 'OFFLINE',
     statusColor: COLORS.neonRed,
     heartbeat: '5m ago',
@@ -39,7 +40,7 @@ const devices = [
     firmware: 'v2.3.8',
   },
   {
-    id: 'ESP32-03',
+    id: 'BG-NODE-03',
     role: 'ACCESS CONTROL',
     status: 'ONLINE',
     statusColor: COLORS.neonGreen,
@@ -140,7 +141,8 @@ export default function Dashboard({ navigation }) {
         { 
           text: t('common.logout'), 
           style: "destructive",
-          onPress: () => {
+          onPress: async () => {
+            await logoutFromFirebase();
             if (navigation) navigation.navigate('Login');
           }
         }
@@ -160,7 +162,7 @@ export default function Dashboard({ navigation }) {
         <View style={styles.headerLeft}>
           <Text style={styles.headerTime}>{formatTime(time)}</Text>
           <View style={styles.vDivider} />
-          <Text style={styles.logoVein}>VEIN</Text>
+          <Text style={styles.logoVein}>BIO</Text>
           <Text style={styles.logoGuard}>GUARD</Text>
         </View>
         <View style={styles.headerRight}>

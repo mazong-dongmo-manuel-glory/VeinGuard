@@ -103,7 +103,7 @@ export default function AccessDecision({ navigation }) {
         <View style={styles.detailsGrid}>
           <BlurView intensity={10} style={styles.detailCard}>
             <Text style={styles.detailLabel}>DEVICE</Text>
-            <Text style={styles.detailValue}>ESP32-01</Text>
+            <Text style={styles.detailValue}>BG-RPI-01</Text>
           </BlurView>
           <BlurView intensity={10} style={styles.detailCard}>
             <Text style={styles.detailLabel}>TIME</Text>

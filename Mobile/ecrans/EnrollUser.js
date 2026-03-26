@@ -53,39 +53,39 @@ export default function EnrollUser({ navigation }) {
   const [consent, setConsent] = useState(true);
 
   const isConnected = useMqttStore((state) => state.isConnected);
-  const client = useMqttStore((state) => state.client);
+  const enrollUser = useMqttStore((state) => state.enrollUser);
 
   const handleCompleteEnrollment = async () => {
     if (!isConnected) {
-      Alert.alert("System Offline", "Unable to reach the security gateway via MQTT.");
+      Alert.alert("Système hors ligne", "Impossible de joindre la passerelle Raspberry Pi via MQTT.");
       return;
     }
 
     if (!consent) {
-      Alert.alert("Consent Required", "You must agree to biometric data processing.");
+      Alert.alert("Consentement requis", "Tu dois accepter le traitement des données biométriques.");
       return;
     }
 
     try {
-      // In a real scenario, we'd have real base64 images from the sensor.
-      // For now, we send the intent to the backend.
       const payload = {
         user_id: employeeId,
         username: fullName,
+        password: 'Temp1234!',
+        role: groupAdmin ? 'admin' : 'operator',
         email: email,
         department: department,
-        images: [] // To be populated by real sensor integration later
+        images: []
       };
 
-      client.publish('veinguard/cmd/enroll', JSON.stringify(payload));
+      await enrollUser(payload);
       
       Alert.alert(
-        "Enrollment Initiated",
-        "The security gateway has started the biometric provisioning cycle. Please follow the instructions on the hardware LCD.",
+        "Enrôlement lancé",
+        "Le Raspberry Pi attend maintenant la paume et le positionnement des doigts. Suis les instructions sur l’écran LCD.",
         [{ text: "OK", onPress: () => navigation.navigate('UserManagement') }]
       );
     } catch (err) {
-      Alert.alert("Error", "Failed to transmit enrollment packet.");
+      Alert.alert("Erreur", "Impossible de transmettre la demande d’enrôlement.");
     }
   };
 

@@ -1,245 +1,309 @@
-import time
-import base64
-from werkzeug.security import check_password_hash
-import database
-from core.security_controller import SecurityController
-import biometrics.biometrics_service as biometrics_service
-import config
-import json
-import paho.mqtt.client as mqtt
+from __future__ import annotations
 
-class VeinGuardMQTTGateway:
-    """
-    The main entry point for the VeinGuard IoT backend.
-    Handles all communication via MQTT, following the user's request to remove Flask.
-    """
+import json
+import logging
+import time
+import uuid
+from datetime import datetime, timezone
+
+import paho.mqtt.client as mqtt
+from werkzeug.security import check_password_hash, generate_password_hash
+
+import config
+import database
+from biometrics.biometrics_service import build_multimodal_profile, verify_multimodal
+from cloud.firebase_service import FirebaseService
+from core.security_controller import SecurityController
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+
+class BioGuardMQTTGateway:
     def __init__(self):
+        database.init_db()
         self.controller = SecurityController()
+        self.firebase = FirebaseService()
         self.client = mqtt.Client()
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
-        
-        # Connect to the broker
-        print(f"Connecting to MQTT Broker @ {config.MQTT_BROKER}...")
+
+        logger.info("Connecting to MQTT broker at %s:%s", config.MQTT_BROKER, config.MQTT_PORT)
         self.client.connect(config.MQTT_BROKER, config.MQTT_PORT, config.MQTT_KEEPALIVE)
 
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            print("Connected successfully to MQTT Broker")
-            # Subscribe to all command topics
-            self.client.subscribe(config.MQTT_TOPIC_CMD)
+            logger.info("MQTT connected")
+            self.client.subscribe(config.MQTT_TOPIC_CMD_ALL)
             self.publish_status("ONLINE")
         else:
-            print(f"Connection failed with code {rc}")
+            logger.error("MQTT connection failed with code %s", rc)
 
     def on_message(self, client, userdata, msg):
         topic = msg.topic
-        payload = msg.payload.decode('utf-8', errors='ignore')
-        print(f"Received message on {topic}: {payload[:50]}...")
+        payload = msg.payload.decode("utf-8", errors="ignore")
+        logger.info("Received message on %s", topic)
 
         try:
-            data = json.loads(payload)
+            data = json.loads(payload) if payload else {}
         except json.JSONDecodeError:
             data = {}
 
-        if topic == "veinguard/cmd/scan":
+        if topic == config.MQTT_CMD_SCAN:
             self.handle_scan_command(data)
-        elif topic == "veinguard/cmd/enroll":
+        elif topic == config.MQTT_CMD_ENROLL:
             self.handle_enroll_command(data)
-        elif topic == "veinguard/cmd/auth/login":
+        elif topic == config.MQTT_CMD_LOGIN:
             self.handle_login_command(data)
-        elif topic == "veinguard/cmd/users/list":
+        elif topic == config.MQTT_CMD_USERS:
             self.handle_users_list_command(data)
-        elif topic == "veinguard/cmd/logs/list":
+        elif topic == config.MQTT_CMD_LOGS:
             self.handle_logs_list_command(data)
-        elif topic == "veinguard/cmd/audit/list":
+        elif topic == config.MQTT_CMD_AUDIT:
             self.handle_audit_list_command(data)
-        elif topic == "veinguard/cmd/settings/update":
+        elif topic == config.MQTT_CMD_SETTINGS:
             self.handle_settings_update_command(data)
-        elif topic == "veinguard/cmd/ping":
+        elif topic == config.MQTT_CMD_PING:
             self.publish_status("ALIVE")
 
-    def handle_scan_command(self, data):
-        """Processes a biometric scan request."""
-        self.controller.handle_scanning()
-        
-        # In a real scenario, we'd wait for sensor data.
-        # Here we assume the image is sent via MQTT (base64) or we use the mock.
-        image_b64 = data.get("image")
+    def handle_scan_command(self, data: dict) -> None:
+        client_id = data.get("client_id", "anonymous")
+        response_topic = config.response_topic("access/scan", client_id)
         user_id = data.get("user_id")
-        
+
         if not user_id:
-            self.controller.handle_access_denied("UNKNOWN OPERATIVE")
+            self.controller.handle_access_denied("ID requis")
+            self.client.publish(response_topic, json.dumps({"status": "error", "error": "Missing user_id"}))
             return
 
-        # Simple verification logic (Integrating with database)
-        conn = database.get_db_connection()
-        user_bio = conn.execute("SELECT lbp_reference, pbbm_mask FROM biometrics WHERE user_id = ?", (user_id,)).fetchone()
-        conn.close()
+        try:
+            capture = self.controller.capture_attempt(claimed_user_id=user_id)
+        except Exception as exc:
+            self.controller.handle_access_denied("Capture invalide")
+            self.client.publish(response_topic, json.dumps({"status": "error", "error": str(exc)}))
+            return
 
-        if user_bio:
-            # Use real biometrics logic if image provided
-            if image_b64:
-                image_bytes = base64.b64decode(image_b64)
-                match, score = verify_user(image_bytes, user_bio['lbp_reference'], user_bio['pbbm_mask'])
-                if match:
-                    self.controller.handle_access_granted(f"ID {user_id}")
-                    self.log_access(user_id, "GRANTED", "mqtt_app_scan")
-                else:
-                    self.controller.handle_access_denied("VASCULAR MISMATCH")
-                    self.log_access(user_id, "DENIED", "mqtt_app_scan")
-            else:
-                # Mock result if no image sent (for testing)
-                self.controller.handle_access_granted(f"ID {user_id}")
-                self.log_access(user_id, "GRANTED", "mqtt_mock")
+        stored_profile = database.get_biometric_profile(user_id) or self.firebase.get_biometric_profile(user_id)
+        if not stored_profile:
+            self.controller.handle_access_denied("Profil absent")
+            self._record_access(
+                user_id=user_id,
+                username=data.get("username"),
+                status="DENIED",
+                score=None,
+                reason="PROFILE_NOT_FOUND",
+                method="multimodal_scan",
+                modalities={"telemetry": capture["telemetry"]},
+            )
+            self.client.publish(response_topic, json.dumps({"status": "fail", "reason": "PROFILE_NOT_FOUND"}))
+            return
+
+        result = verify_multimodal(capture["frame"], stored_profile)
+        if result["match"]:
+            self.controller.handle_access_granted(user_id, result["score"])
+            status = "GRANTED"
+            reason = "MATCH"
         else:
-            self.controller.handle_access_denied("NO PROFILE FOUND")
+            self.controller.handle_access_denied("Mismatch")
+            status = "DENIED"
+            reason = "BIOMETRIC_MISMATCH"
 
-    def handle_enroll_command(self, data):
-        """Enrolls a new user using hardware camera or MQTT images."""
-        images_b64 = data.get("images", [])
+        event = self._record_access(
+            user_id=user_id,
+            username=data.get("username"),
+            status=status,
+            score=result["score"],
+            reason=reason,
+            method="multimodal_scan",
+            modalities={
+                "components": result["components"],
+                "telemetry": capture["telemetry"],
+                "preview_path": capture["preview_path"],
+            },
+        )
+
+        response = {
+            "status": "success",
+            "result": status,
+            "score": result["score"],
+            "threshold": result["threshold"],
+            "components": result["components"],
+            "event": event,
+        }
+        self.client.publish(response_topic, json.dumps(response))
+
+    def handle_enroll_command(self, data: dict) -> None:
+        client_id = data.get("client_id", "anonymous")
+        response_topic = config.response_topic("users/enroll", client_id)
         user_id = data.get("user_id")
-        
-        self.controller.lcd.show_message("ENROLLING...", "FOLLOW SENSORS")
+        username = data.get("username", user_id or "unknown")
+        role = data.get("role", "operator")
+        department = data.get("department", "")
+        password = data.get("password", "Temp1234!")
 
-        # Capture from hardware if no images provided via MQTT
-        if not images_b64:
-            image_bytes_list = []
-            for i in range(3): # Take 3 samples
-                self.controller.lcd.show_message("ENROLLING...", f"SAMPLE {i+1}/3")
-                image_bytes_list.append(biometrics_service.capture_image(f"enroll_{i}.jpg"))
-                time.sleep(1)
-        else:
-            image_bytes_list = [base64.b64decode(img) for img in images_b64]
-        
-        if not user_id or not image_bytes_list:
-            self.publish_status("ENROLL_FAILED: Missing Data")
+        if not user_id:
+            self.client.publish(response_topic, json.dumps({"status": "error", "error": "Missing user_id"}))
             return
 
-        ref_lbp, pbbm_mask = biometrics_service.enroll_user(image_bytes_list)
-        if ref_lbp:
-            conn = database.get_db_connection()
-            conn.execute("INSERT OR REPLACE INTO biometrics (user_id, lbp_reference, pbbm_mask) VALUES (?, ?, ?)",
-                         (user_id, ref_lbp, pbbm_mask))
-            conn.commit()
-            conn.close()
-            self.controller.lcd.show_message("ENROLL SUCCESS", f"USER ID {user_id}")
-            self.publish_status(f"ENROLL_SUCCESS: {user_id}")
-        else:
-            self.controller.lcd.show_message("ENROLL FAILED", "BAD SAMPLES")
-            self.publish_status("ENROLL_FAILED: Biometric failure")
+        self.controller.handle_enrollment(user_id)
 
-    def handle_login_command(self, data):
-        """Processes a login request from the mobile app."""
+        try:
+            capture = self.controller.capture_attempt(claimed_user_id=user_id)
+            profile = build_multimodal_profile(capture["frame"])
+        except Exception as exc:
+            self.client.publish(response_topic, json.dumps({"status": "error", "error": str(exc)}))
+            return
+
+        database.upsert_user(
+            user_id=user_id,
+            username=username,
+            password_hash=generate_password_hash(password, method="pbkdf2:sha256"),
+            role=role,
+            department=department,
+        )
+        database.save_biometric_profile(user_id, profile)
+        self.firebase.save_user_profile(
+            user_id,
+            {"username": username, "role": role, "department": department, "device_id": config.DEVICE_ID},
+        )
+        self.firebase.save_biometric_profile(user_id, profile)
+        database.log_audit("INFO", "USER_ENROLLED", f"Profil multimodal cree pour {username}", user_id)
+        self.publish_status("ENROLLMENT_COMPLETED")
+
+        self.client.publish(
+            response_topic,
+            json.dumps(
+                {
+                    "status": "success",
+                    "user_id": user_id,
+                    "username": username,
+                    "profile_modalities": profile["modalities"],
+                }
+            ),
+        )
+        self.controller.reset_idle()
+
+    def handle_login_command(self, data: dict) -> None:
+        client_id = data.get("client_id", "anonymous")
+        response_topic = config.response_topic("auth/login", client_id)
         username = data.get("username")
         password = data.get("password")
-        client_id = data.get("client_id", "anonymous")
-        
-        response_topic = f"veinguard/res/auth/login/{client_id}"
-        
+
         if not username or not password:
-            self.client.publish(response_topic, json.dumps({"error": "Missing credentials"}))
+            self.client.publish(response_topic, json.dumps({"status": "fail", "error": "Missing credentials"}))
             return
 
         conn = database.get_db_connection()
-        user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        user = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         conn.close()
 
-        if user and check_password_hash(user['password_hash'], password):
-            response = {
-                "status": "success",
-                "user": {"id": user['id'], "username": user['username'], "role": user['role']}
-            }
-            self.client.publish(response_topic, json.dumps(response))
-            print(f"Login success for {username}")
+        if user and check_password_hash(user["password_hash"], password):
+            self.client.publish(
+                response_topic,
+                json.dumps(
+                    {
+                        "status": "success",
+                        "user": {
+                            "id": user["id"],
+                            "username": user["username"],
+                            "role": user["role"],
+                            "department": user["department"],
+                        },
+                    }
+                ),
+            )
         else:
             self.client.publish(response_topic, json.dumps({"status": "fail", "error": "Invalid credentials"}))
-            print(f"Login failed for {username}")
 
-    def handle_users_list_command(self, data):
-        """Returns the list of operatives to the mobile app."""
+    def handle_users_list_command(self, data: dict) -> None:
         client_id = data.get("client_id", "anonymous")
-        response_topic = f"veinguard/res/users/list/{client_id}"
-        
-        conn = database.get_db_connection()
-        users = conn.execute('SELECT id, username, role, created_at FROM users').fetchall()
-        conn.close()
-        
-        response = [dict(u) for u in users]
-        self.client.publish(response_topic, json.dumps(response))
+        response_topic = config.response_topic("users/list", client_id)
+        self.client.publish(response_topic, json.dumps(database.list_users()))
 
-    def handle_logs_list_command(self, data):
-        """Returns the access logs to the mobile app."""
+    def handle_logs_list_command(self, data: dict) -> None:
         client_id = data.get("client_id", "anonymous")
-        response_topic = f"veinguard/res/logs/list/{client_id}"
-        
-        conn = database.get_db_connection()
-        logs = conn.execute('''
-            SELECT al.*, u.username 
-            FROM access_logs al 
-            LEFT JOIN users u ON al.user_id = u.id 
-            ORDER BY al.timestamp DESC LIMIT 50
-        ''').fetchall()
-        conn.close()
-        
-        response = [dict(l) for l in logs]
-        self.client.publish(response_topic, json.dumps(response))
+        response_topic = config.response_topic("access/logs", client_id)
+        self.client.publish(response_topic, json.dumps(database.list_access_events()))
 
-    def handle_audit_list_command(self, data):
-        """Returns administrative audit logs."""
+    def handle_audit_list_command(self, data: dict) -> None:
         client_id = data.get("client_id", "anonymous")
-        response_topic = f"veinguard/res/audit/list/{client_id}"
-        
-        conn = database.get_db_connection()
-        logs = conn.execute('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 50').fetchall()
-        conn.close()
-        
-        response = [dict(l) for l in logs]
-        self.client.publish(response_topic, json.dumps(response))
+        response_topic = config.response_topic("audit/list", client_id)
+        self.client.publish(response_topic, json.dumps(database.list_audit_logs()))
 
-    def handle_settings_update_command(self, data):
-        """Updates system settings in the database."""
-        conn = database.get_db_connection()
+    def handle_settings_update_command(self, data: dict) -> None:
         for key, value in data.items():
-            if key in ["broker_host", "tls_enabled", "biometric_override"]:
-                conn.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (key, str(value)))
-        conn.commit()
-        conn.close()
+            database.update_device_state(key, value)
+        database.log_audit("INFO", "SETTINGS_UPDATED", "Configuration mobile synchronisee", json.dumps(data))
         self.publish_status("SETTINGS_UPDATED")
 
-    def publish_status(self, status):
-        msg = json.dumps({"status": status, "timestamp": time.time()})
-        self.client.publish(config.MQTT_TOPIC_STATUS, msg)
+    def publish_status(self, status: str) -> None:
+        payload = {
+            "status": status,
+            "device_id": config.DEVICE_ID,
+            "app": config.APP_NAME,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self.client.publish(config.MQTT_TOPIC_STATUS, json.dumps(payload))
 
-    def log_access(self, user_id, status, method):
-        conn = database.get_db_connection()
-        conn.execute("INSERT INTO access_logs (user_id, status, method) VALUES (?, ?, ?)",
-                     (user_id, status, method))
-        conn.commit()
-        conn.close()
-        
-        # Broadcast logs to MQTT as well
-        log_msg = json.dumps({"user_id": user_id, "status": status, "method": method})
-        self.client.publish(config.MQTT_TOPIC_LOGS, log_msg)
+    def publish_telemetry(self) -> None:
+        payload = self.controller.sensor_snapshot()
+        database.update_device_state("last_telemetry", payload)
+        self.firebase.save_telemetry(config.DEVICE_ID, payload)
+        self.client.publish(config.MQTT_TOPIC_TELEMETRY, json.dumps(payload))
 
-    def run(self):
-        """Main loop: Process MQTT messages and check hardware sensors."""
+    def _record_access(
+        self,
+        user_id: str | None,
+        username: str | None,
+        status: str,
+        score: float | None,
+        reason: str,
+        method: str,
+        modalities: dict,
+    ) -> dict:
+        event = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "username": username or user_id,
+            "status": status,
+            "score": score,
+            "reason": reason,
+            "method": method,
+            "modalities": modalities,
+            "device_id": config.DEVICE_ID,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        database.log_access_event(
+            event_id=event["id"],
+            user_id=user_id,
+            username=event["username"],
+            status=status,
+            score=score,
+            reason=reason,
+            method=method,
+            modalities=modalities,
+            synced=self.firebase.save_access_event(event["id"], event),
+        )
+        self.client.publish(config.MQTT_TOPIC_EVENTS, json.dumps(event))
+        return event
+
+    def run(self) -> None:
         self.client.loop_start()
-        print("[Gateway] Background loop started. Monitoring sensors...")
-        
+        logger.info("Gateway running")
         try:
             while True:
-                # Example: Proximity-based auto-alert
-                if self.controller.check_proximity(threshold=0.1): # 10cm
-                    print("[Gateway] Hand detected! Proximity alert.")
-                    self.publish_status("PROXIMITY_DETECTED")
-                    # We could trigger a scan automatically here if desired
-                
-                time.sleep(1)
+                self.publish_telemetry()
+                time.sleep(3)
         except KeyboardInterrupt:
-            print("[Gateway] Shutting down...")
+            logger.info("Shutdown requested")
+        finally:
             self.client.loop_stop()
+            self.controller.close()
+
+
+VeinGuardMQTTGateway = BioGuardMQTTGateway
+
 
 if __name__ == "__main__":
-    gateway = VeinGuardMQTTGateway()
+    gateway = BioGuardMQTTGateway()
     gateway.run()

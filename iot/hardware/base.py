@@ -1,33 +1,41 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 
-class Actuator(ABC):
-    """Base class for all actuators (LEDs, Relays, etc.)"""
-    @abstractmethod
-    def on(self):
+
+class Closable(ABC):
+    def close(self) -> None:
         pass
 
-    @abstractmethod
-    def off(self):
-        pass
 
-class Display(ABC):
-    """Base class for visual feedback (LCD, OLED, etc.)"""
+class Actuator(Closable, ABC):
     @abstractmethod
-    def show_message(self, line1, line2=""):
-        pass
+    def on(self) -> None:
+        raise NotImplementedError
 
     @abstractmethod
-    def clear(self):
-        pass
+    def off(self) -> None:
+        raise NotImplementedError
 
-class Camera(ABC):
-    """Base class for image capture (PiCamera, Webcam, etc.)"""
+
+class Display(Closable, ABC):
     @abstractmethod
-    def capture(self, filename):
-        pass
+    def show_message(self, line1: str, line2: str = "") -> None:
+        raise NotImplementedError
 
-class Sensor(ABC):
-    """Base class for environmental sensors (Distance, PIR, etc.)"""
+    @abstractmethod
+    def clear(self) -> None:
+        raise NotImplementedError
+
+
+class Camera(Closable, ABC):
+    @abstractmethod
+    def capture_array(self):
+        raise NotImplementedError
+
+
+class Sensor(Closable, ABC):
     @abstractmethod
     def read(self):
-        pass
+        raise NotImplementedError
+

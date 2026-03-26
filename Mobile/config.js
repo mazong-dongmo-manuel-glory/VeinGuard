@@ -1,5 +1,32 @@
-// VeinGuard Configuration
-// Use ws:// for web/emulator or mqtt:// for native (depending on library)
-// For Expo + 'mqtt' npm package, ws:// is often safer for cross-platform.
-export const MQTT_BROKER_URL = 'ws://172.16.9.115:9001'; // Default MQTT-over-WebSockets port
-export const API_URL = 'LEGACY_REST_DISABLED';
+export const APP_NAME = 'BioGuard Access';
+
+export const MQTT_BROKER_URL = 'ws://172.16.9.115:9001';
+export const MQTT_TOPIC_PREFIX = 'bioguard';
+
+export const topic = (path) => `${MQTT_TOPIC_PREFIX}/${path.replace(/^\/+/, '')}`;
+export const responseTopic = (command, clientId) =>
+  topic(`res/${command.replace(/^\/+/, '')}/${clientId}`);
+
+export const MQTT_TOPICS = {
+  status: topic('status'),
+  telemetry: topic('telemetry'),
+  loginCmd: topic('cmd/auth/login'),
+  usersCmd: topic('cmd/users/list'),
+  enrollCmd: topic('cmd/users/enroll'),
+  scanCmd: topic('cmd/access/scan'),
+  logsCmd: topic('cmd/access/logs'),
+  auditCmd: topic('cmd/audit/list'),
+  settingsCmd: topic('cmd/settings/update'),
+};
+
+export const FIREBASE_CONFIG = {
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 'AIzaSyBKSvCUfQXY6xRMAQuW5KLNEgj3WSaSBpA',
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || 'veinguard-d127f.firebaseapp.com',
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'veinguard-d127f',
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || 'veinguard-d127f.firebasestorage.app',
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '375240610666',
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || '1:375240610666:web:860ae203642a2ccd654b13',
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || 'G-DCZ2V8JV0B',
+};
+
+export const FIREBASE_ENABLED = true;

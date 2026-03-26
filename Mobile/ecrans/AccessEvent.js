@@ -113,7 +113,7 @@ export default function AccessEvent({ navigation, route }) {
             <TimelineItem
               icon="play"
               title="Scan Start"
-              desc="Biometric sensor activated, vein pattern capture initiated"
+              desc="Biometric sensor activated, multimodal capture initiated"
               meta="Duration: 280ms"
               time="14:23:42.341"
               dotColor={COLORS.neonCyan}
@@ -121,7 +121,7 @@ export default function AccessEvent({ navigation, route }) {
             <TimelineItem
               icon="cloud-upload"
               title="Publish"
-              desc="Vein data transmitted via MQTT to authentication server"
+              desc="Biometric summary transmitted via MQTT to authentication gateway"
               meta="Latency: 127ms"
               time="14:23:44.188"
               dotColor={COLORS.neonPurple}
@@ -147,8 +147,8 @@ export default function AccessEvent({ navigation, route }) {
         </BlurView>
 
         <BlurView intensity={10} style={styles.card}>
-          <Text style={styles.cardTitle}>ESP32 TELEMETRY</Text>
-          <TelemetryRow label="Device ID" value="ESP32-01" />
+          <Text style={styles.cardTitle}>RPI TELEMETRY</Text>
+          <TelemetryRow label="Device ID" value="BG-RPI-01" />
           <TelemetryRow label="RSSI" value="-42 dBm" valueColor={COLORS.neonGreen} />
           <TelemetryRow label="Uptime" value="72h 14m" />
           <TelemetryRow label="Internal Temp" value="34.2°C" valueColor={COLORS.neonAmber} />
@@ -158,12 +158,12 @@ export default function AccessEvent({ navigation, route }) {
           <Text style={styles.sectionTitle}>RAW PAYLOADS</Text>
           <CodeBlock
             title="Scan Request"
-            topic="veinGuard/esp32-01/scan/request"
-            payload={`{\n  "eventId": "${eventId}",\n  "deviceId": "ESP32-01",\n  "timestamp": "2024-01-15T14:23:42.341Z",\n  "userId": "${userSlug}",\n  "sensorData": {\n    "quality": 0.94,\n    "pattern": "*****MASKED*****"\n  }\n}`}
+            topic="bioguard/cmd/access/scan"
+            payload={`{\n  "eventId": "${eventId}",\n  "deviceId": "BG-RPI-01",\n  "timestamp": "2024-01-15T14:23:42.341Z",\n  "userId": "${userSlug}",\n  "sensorData": {\n    "quality": 0.94,\n    "modalities": ["palmprint", "finger_geometry"]\n  }\n}`}
           />
           <CodeBlock
             title="Auth Response"
-            topic="veinGuard/esp32-01/auth/response"
+            topic="bioguard/res/access/scan/mobile-demo"
             payload={`{\n  "eventId": "${eventId}",\n  "result": "${eventStatus}",\n  "confidence": ${eventScore === '--' ? 'null' : (Number(eventScore.replace('%', '')) / 100).toFixed(3)},\n  "userId": "${userSlug}",\n  "timestamp": "2024-01-15T14:23:44.956Z",\n  "doorAction": "UNLOCK_5S"\n}`}
           />
         </View>

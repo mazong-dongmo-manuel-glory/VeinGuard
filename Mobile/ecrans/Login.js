@@ -17,6 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useMqttStore } from '../store/mqttStore';
+import { FIREBASE_ENABLED } from '../services/firebase';
+import { loginWithEmailPassword } from '../services/auth';
 
 export default function Login({ navigation }) {
   const { t } = useTranslation();
@@ -25,7 +27,6 @@ export default function Login({ navigation }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   
-  const login = useMqttStore((state) => state.login);
   const isConnected = useMqttStore((state) => state.isConnected);
 
   const handleLogin = async () => {
@@ -34,21 +35,21 @@ export default function Login({ navigation }) {
       return;
     }
 
-    if (!isConnected) {
-      Alert.alert("Erreur Connexion", "Le système est hors-ligne. Veuillez vérifier le broker MQTT.");
-      return;
-    }
-
     try {
-      const response = await login(username, password);
-
-      if (response && response.status === 'success') {
+      if (FIREBASE_ENABLED) {
+        await loginWithEmailPassword(username, password);
         if (navigation) navigation.navigate('Dashboard');
-      } else {
-        Alert.alert("Échec de connexion", response.error || "Identifiants incorrects");
+        return;
       }
+
+      if (!isConnected) {
+        Alert.alert("Erreur Connexion", "Le système est hors-ligne. Veuillez vérifier le broker MQTT.");
+        return;
+      }
+
+      Alert.alert("Erreur", "Firebase Authentication n'est pas disponible.");
     } catch (error) {
-      Alert.alert("Erreur Système", "Le serveur de sécurité ne répond pas.");
+      Alert.alert("Échec de connexion", error?.message || "Identifiants incorrects");
       console.error(error);
     }
   };
@@ -89,7 +90,7 @@ export default function Login({ navigation }) {
                 </LinearGradient>
               </View>
               <Text style={styles.logoTitle}>
-                <Text style={styles.logoVein}>VEIN</Text>
+                <Text style={styles.logoVein}>BIO</Text>
                 <Text style={styles.logoGuard}>GUARD</Text>
               </Text>
               <Text style={styles.logoSubtitle}>{t('login.subtitle').toUpperCase()}</Text>
