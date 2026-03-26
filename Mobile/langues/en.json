@@ -56,7 +56,7 @@
     "domainLabel": "DOMAIN",
     "showPassword": "Show password",
     "loginBtn": "🔑 CREDENTIAL ACCESS",
-    "veinBtn": "✋ MULTIMODAL SCAN ACCESS",
+    "veinBtn": "✋ HAND SCAN ACCESS",
     "rememberMe": "Remember me",
     "rememberSession": "Stay signed in",
     "forgotPassword": "Forgot password?",
@@ -123,7 +123,7 @@
     "systemStatus": "SYSTEM STATUS",
     "operational": "OPERATIONAL",
     "connected": "CONNECTED",
-    "startVeinScan": "START BIOMETRIC SCAN",
+    "startVeinScan": "START HAND SCAN",
     "viewHistory": "VIEW HISTORY",
     "quickActions": "QUICK ACTIONS",
     "securityAlert": "Security Alert Detected",
@@ -276,7 +276,7 @@
     "enrollStep3": "3. Verification",
     "startEnrollment": "Start Enrollment",
     "nextStep": "Next Step",
-    "scanVein": "Scan Palm",
+    "scanVein": "Scan Hand",
     "scanQuality": "Scan Quality",
     "retakeScan": "Retake Scan",
     "enrollmentComplete": "Enrollment Complete",
@@ -286,7 +286,7 @@
     "completeEnrollment": "✓ COMPLETE ENROLLMENT",
     "cancelBtn": "✕ CANCEL",
     "userProfile": "👥 USER PROFILE",
-    "veinCapture": "✋ MULTIMODAL CAPTURE",
+    "veinCapture": "✋ HAND CAPTURE",
     "enrollmentStatus": "📶 ENROLLMENT STATUS",
     "dropdownLabel": "User Management (Roles/List)",
     "consentTitle": "Biometric Consent",
@@ -302,7 +302,7 @@
     "departmentSelect": "Select a department",
     "livePreview": "Live camera preview",
     "cameraPreviewUnavailable": "The live camera stream will appear here as soon as the gateway publishes telemetry.",
-    "multiAngleDesc": "Place the hand under multiple angles. The Raspberry Pi captures several NoIR images to build a more robust biometric key.",
+    "multiAngleDesc": "Place the hand under multiple angles. The Raspberry Pi captures several NoIR images to build a more robust palmprint signature.",
     "sampleCountLabel": "MULTI-ANGLE SAMPLES",
     "enrollmentSuccessDesc": "Enrollment completed. Assigned identifier: {{userId}}",
     "requiredFieldsDesc": "Full name and e-mail are required.",
@@ -458,8 +458,8 @@
     "deleteErrorDesc": "Unable to delete the user."
   },
   "veinScan": {
-    "title": "MULTIMODAL SCAN",
-    "subtitle": "Position the palm and align the fingers on the scanner",
+    "title": "HAND SCAN",
+    "subtitle": "Position the hand inside the frame and align the fingers",
     "quality": "QUALITY",
     "brightness": "BRIGHTNESS",
     "contrast": "CONTRAST",
@@ -495,7 +495,7 @@
     "userIdPlaceholder": "Enter User ID for testing",
     "testAccess": "TEST ACCESS",
     "privacyTitle": "Privacy Notice",
-    "privacyText": "Biometric data is processed on the Raspberry Pi and securely synchronized to Firebase for history and administration. Raw images are not used as the primary long-term authentication source.",
-    "dropdownLabel": "Multimodal scan (biometric HUD)"
+    "privacyText": "Hand biometric data is processed on the Raspberry Pi and securely synchronized to Firebase for history and administration. Raw images are not used as the primary long-term authentication source.",
+    "dropdownLabel": "Hand scan (biometric HUD)"
   }
 }

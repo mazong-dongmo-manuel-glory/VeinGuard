@@ -50,7 +50,7 @@ def _preprocess_noir_gray(roi_bgr: np.ndarray) -> np.ndarray:
     return _create_clahe().apply(gray)
 
 
-def _enhance_veins(gray_roi: np.ndarray, hand_mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _enhance_palm_texture(gray_roi: np.ndarray, hand_mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     blackhat_small = cv2.morphologyEx(
         gray_roi,
         cv2.MORPH_BLACKHAT,
@@ -195,10 +195,10 @@ def _extract_orb_signature(image: np.ndarray, mask: np.ndarray | None) -> dict[s
     }
 
 
-def _quality_score(hand_area: float, keypoints: int, vein_density: float, sharpness: float) -> float:
+def _quality_score(hand_area: float, keypoints: int, texture_density: float, sharpness: float) -> float:
     area_component = min(hand_area / 25000.0, 1.0)
     kp_component = min(keypoints / 90.0, 1.0)
-    density_component = min(vein_density / 0.22, 1.0)
+    density_component = min(texture_density / 0.22, 1.0)
     sharpness_component = min(sharpness / 250.0, 1.0)
     return round(
         float(0.28 * area_component + 0.27 * kp_component + 0.20 * density_component + 0.25 * sharpness_component),
@@ -287,21 +287,21 @@ def build_multimodal_profile(frame_bgr: np.ndarray, mode: str = "scan") -> dict[
     contour_mask = np.zeros(gray_roi.shape, dtype=np.uint8)
     cv2.drawContours(contour_mask, [contour], -1, 255, thickness=cv2.FILLED)
 
-    vein_enhanced, vein_mask = _enhance_veins(gray_roi, contour_mask)
-    orb = _extract_orb_signature(vein_enhanced, contour_mask)
+    texture_enhanced, texture_mask = _enhance_palm_texture(gray_roi, contour_mask)
+    orb = _extract_orb_signature(texture_enhanced, contour_mask)
 
     hand_pixels = max(int(np.count_nonzero(contour_mask)), 1)
-    vein_pixels = int(np.count_nonzero(vein_mask))
-    vein_density = vein_pixels / float(hand_pixels)
-    sharpness = float(cv2.Laplacian(vein_enhanced, cv2.CV_32F).var())
+    texture_pixels = int(np.count_nonzero(texture_mask))
+    texture_density = texture_pixels / float(hand_pixels)
+    sharpness = float(cv2.Laplacian(texture_enhanced, cv2.CV_32F).var())
 
     quality = {
         "hand_area": geometry["area"],
         "keypoints": orb["keypoints"],
         "mask_fill_ratio": round(hand_pixels / float(contour_mask.size), 4),
-        "vein_density": round(vein_density, 4),
+        "texture_density": round(texture_density, 4),
         "sharpness": round(sharpness, 4),
-        "score": _quality_score(geometry["area"], orb["keypoints"], vein_density, sharpness),
+        "score": _quality_score(geometry["area"], orb["keypoints"], texture_density, sharpness),
     }
     validation = _capture_validation(geometry, quality, mode=mode)
     quality["validation"] = validation
@@ -320,17 +320,17 @@ def build_multimodal_profile(frame_bgr: np.ndarray, mode: str = "scan") -> dict[
                 "orb",
             ],
         },
-        "modalities": ["palm_texture", "vein_pattern", "finger_geometry"],
+        "modalities": ["palmprint", "hand_geometry", "finger_geometry"],
         "palmprint": {
             "geometry": geometry,
-            "intensity_histogram": _extract_histogram(vein_enhanced, contour_mask),
+            "intensity_histogram": _extract_histogram(texture_enhanced, contour_mask),
             "orb_signature": orb["vector"],
             "descriptor_rows": orb["descriptor_rows"],
             "quality": quality,
         },
-        "vein_pattern": {
-            "density": round(vein_density, 6),
-            "binary_fill_ratio": round(vein_pixels / float(vein_mask.size), 6),
+        "surface_texture": {
+            "density": round(texture_density, 6),
+            "binary_fill_ratio": round(texture_pixels / float(texture_mask.size), 6),
         },
         "finger_geometry": {
             "estimated_finger_gaps": geometry["convexity_defects"],
@@ -339,6 +339,27 @@ def build_multimodal_profile(frame_bgr: np.ndarray, mode: str = "scan") -> dict[
     }
     profile["biometric_key"] = generate_biometric_key(profile)
     return profile
+
+
+def _profile_texture_density(profile: dict[str, Any]) -> float:
+    palm_quality = profile.get("palmprint", {}).get("quality", {})
+    if palm_quality.get("texture_density") is not None:
+        return float(palm_quality["texture_density"])
+    if palm_quality.get("vein_density") is not None:
+        return float(palm_quality["vein_density"])
+    if profile.get("surface_texture", {}).get("density") is not None:
+        return float(profile["surface_texture"]["density"])
+    if profile.get("vein_pattern", {}).get("density") is not None:
+        return float(profile["vein_pattern"]["density"])
+    return 0.0
+
+
+def _profile_texture_fill_ratio(profile: dict[str, Any]) -> float:
+    if profile.get("surface_texture", {}).get("binary_fill_ratio") is not None:
+        return float(profile["surface_texture"]["binary_fill_ratio"])
+    if profile.get("vein_pattern", {}).get("binary_fill_ratio") is not None:
+        return float(profile["vein_pattern"]["binary_fill_ratio"])
+    return 0.0
 
 
 def generate_biometric_key(profile: dict[str, Any]) -> str:
@@ -353,7 +374,7 @@ def generate_biometric_key(profile: dict[str, Any]) -> str:
         "hu": [round(float(value), 4) for value in geometry["hu"]],
         "histogram": [round(float(value), 4) for value in profile["palmprint"]["intensity_histogram"]],
         "orb_signature": [round(float(value), 2) for value in profile["palmprint"]["orb_signature"]],
-        "vein_density": round(float(profile["vein_pattern"]["density"]), 5),
+        "texture_density": round(_profile_texture_density(profile), 5),
     }
     serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
@@ -404,14 +425,14 @@ def _merge_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
                 "hand_area": round(_mean_numeric([sample["palmprint"]["quality"]["hand_area"] for sample in samples]), 4),
                 "keypoints": int(round(_mean_numeric([sample["palmprint"]["quality"]["keypoints"] for sample in samples]))),
                 "mask_fill_ratio": round(_mean_numeric([sample["palmprint"]["quality"]["mask_fill_ratio"] for sample in samples]), 4),
-                "vein_density": round(_mean_numeric([sample["palmprint"]["quality"]["vein_density"] for sample in samples]), 4),
+                "texture_density": round(_mean_numeric([_profile_texture_density(sample) for sample in samples]), 4),
                 "sharpness": round(_mean_numeric([sample["palmprint"]["quality"]["sharpness"] for sample in samples]), 4),
                 "score": round(_mean_numeric([sample["palmprint"]["quality"]["score"] for sample in samples]), 4),
             },
         },
-        "vein_pattern": {
-            "density": round(_mean_numeric([sample["vein_pattern"]["density"] for sample in samples]), 6),
-            "binary_fill_ratio": round(_mean_numeric([sample["vein_pattern"]["binary_fill_ratio"] for sample in samples]), 6),
+        "surface_texture": {
+            "density": round(_mean_numeric([_profile_texture_density(sample) for sample in samples]), 6),
+            "binary_fill_ratio": round(_mean_numeric([_profile_texture_fill_ratio(sample) for sample in samples]), 6),
         },
         "finger_geometry": {
             "estimated_finger_gaps": geometry["convexity_defects"],
@@ -531,7 +552,7 @@ def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, An
         "orb": 0.18,
         "histogram": 0.16,
         "descriptor": 0.14,
-        "vein_density": 0.06,
+        "texture_density": 0.06,
     }
     available_components = {
         "geometry": geometry_score,
@@ -555,12 +576,12 @@ def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, An
         descriptor_score = _descriptor_match_score(live_rows, ref_rows)
         available_components["descriptor"] = descriptor_score
 
-    live_density = live_profile.get("vein_pattern", {}).get("density")
-    ref_density = stored_profile.get("vein_pattern", {}).get("density")
+    live_density = _profile_texture_density(live_profile)
+    ref_density = _profile_texture_density(stored_profile)
     density_score = None
     if live_density is not None and ref_density is not None:
         density_score = _relative_score(live_density, ref_density)
-        available_components["vein_density"] = density_score
+        available_components["texture_density"] = density_score
 
     active_weight = sum(component_weights[name] for name in available_components)
     palm_score = sum(
@@ -584,7 +605,7 @@ def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, An
             "orb": round(float(orb_score), 4),
             "histogram": round(float(histogram_score), 4) if histogram_score is not None else None,
             "descriptor": round(float(descriptor_score), 4) if descriptor_score is not None else None,
-            "vein_density": round(float(density_score), 4) if density_score is not None else None,
+            "texture_density": round(float(density_score), 4) if density_score is not None else None,
         },
     }
 
@@ -608,7 +629,7 @@ def verify_live_profile(live_profile: dict[str, Any], stored_profile: dict[str, 
 
 
 def _average_components(results: list[dict[str, Any]]) -> dict[str, float | None]:
-    component_names = ("geometry", "hu", "orb", "histogram", "descriptor", "vein_density")
+    component_names = ("geometry", "hu", "orb", "histogram", "descriptor", "texture_density")
     averaged = {}
     for name in component_names:
         values = [result["components"].get(name) for result in results if result.get("components", {}).get(name) is not None]
