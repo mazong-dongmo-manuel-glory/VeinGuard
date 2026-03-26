@@ -480,7 +480,7 @@ def _enhance_palm_lines(normalized_gray: np.ndarray, normalized_mask: np.ndarray
 
 def _gabor_kernels() -> list[np.ndarray]:
     key = (
-        int(config.PALM_CODE_ORIENTATIONS),
+        max(6, int(config.PALM_CODE_ORIENTATIONS)),
         int(config.PALM_GABOR_KERNEL_SIZE),
         float(config.PALM_GABOR_SIGMA),
         float(config.PALM_GABOR_LAMBDA),
@@ -491,7 +491,7 @@ def _gabor_kernels() -> list[np.ndarray]:
         return kernels
 
     kernels = []
-    orientation_count = max(4, int(config.PALM_CODE_ORIENTATIONS))
+    orientation_count = max(6, int(config.PALM_CODE_ORIENTATIONS))
     kernel_size = max(7, int(config.PALM_GABOR_KERNEL_SIZE))
     if kernel_size % 2 == 0:
         kernel_size += 1
@@ -528,46 +528,133 @@ def _block_reduce_3d(array: np.ndarray, block_size: int) -> np.ndarray:
     return reduced.reshape(reduced.shape[0], height // block_size, block_size, width // block_size, block_size).mean(axis=(2, 4))
 
 
-def _extract_orientation_template(
-    enhanced_gray: np.ndarray,
-    normalized_mask: np.ndarray,
+def _round_vector(values: list[float] | np.ndarray, digits: int = 6) -> list[float]:
+    return [round(float(value), digits) for value in np.array(values, dtype=np.float32).flatten().tolist()]
+
+
+def _palmcode_response_stack(roi_gray: np.ndarray) -> np.ndarray:
+    image_f = roi_gray.astype(np.float32) / 255.0
+    responses = [cv2.filter2D(image_f, cv2.CV_32F, kernel) for kernel in _gabor_kernels()]
+    return np.stack(responses, axis=0)
+
+
+def extract_gabor_responses(roi_gray: np.ndarray) -> list[np.ndarray]:
+    return [response for response in _palmcode_response_stack(roi_gray)]
+
+
+def _extract_concentric_ring_features(
+    filtered_img: np.ndarray,
+    palm_mask: np.ndarray,
+    band_count: int | None = None,
+    overlap: float | None = None,
 ) -> dict[str, Any]:
-    image_f = enhanced_gray.astype(np.float32) / 255.0
-    responses = []
-    for kernel in _gabor_kernels():
-        responses.append(np.abs(cv2.filter2D(image_f, cv2.CV_32F, kernel)))
-    response_stack = np.stack(responses, axis=0)
+    if band_count is None:
+        band_count = max(1, int(config.PALM_CODE_RING_COUNT))
+    if overlap is None:
+        overlap = float(config.PALM_CODE_RING_OVERLAP)
 
-    block_size = max(2, int(config.PALM_CODE_BLOCK_SIZE))
-    block_responses = _block_reduce_3d(response_stack, block_size)
-    block_mask = _block_reduce_2d((normalized_mask > 0).astype(np.float32), block_size) >= 0.35
+    h, w = filtered_img.shape[:2]
+    cx = w // 2
+    cy = h // 2
+    yy, xx = np.indices((h, w))
+    radial_distance = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+    valid_mask = palm_mask > 0
+    valid_radii = radial_distance[valid_mask]
+    max_radius = float(np.quantile(valid_radii, 0.98)) if valid_radii.size else float(min(cx, cy))
+    max_radius = max(max_radius, 1.0)
+    band_width = max_radius / float(band_count + 1)
 
-    best_index = np.argmax(block_responses, axis=0).astype(np.uint8)
-    best_response = np.max(block_responses, axis=0)
-    second_response = np.partition(block_responses, -2, axis=0)[-2]
-
-    active_blocks = int(np.count_nonzero(block_mask))
-    line_strength = float(best_response[block_mask].mean()) if active_blocks else 0.0
-    orientation_confidence = (
-        float(((best_response - second_response) / np.maximum(best_response, 1e-6))[block_mask].mean())
-        if active_blocks
-        else 0.0
-    )
-
-    histogram = np.zeros(max(4, int(config.PALM_CODE_ORIENTATIONS)), dtype=np.float32)
-    if active_blocks:
-        valid_codes = best_index[block_mask]
-        histogram = np.bincount(valid_codes, minlength=histogram.size).astype(np.float32)
-        histogram /= max(float(histogram.sum()), 1.0)
+    features: list[float] = []
+    ring_pixel_counts: list[int] = []
+    valid_ring_count = 0
+    for ring_index in range(1, band_count + 1):
+        inner_radius = ring_index * band_width
+        outer_radius = inner_radius + band_width
+        overlap_width = band_width * max(float(overlap), 0.0)
+        ring_mask = (
+            (radial_distance >= max(0.0, inner_radius - overlap_width))
+            & (radial_distance < min(max_radius, outer_radius + overlap_width))
+            & valid_mask
+        )
+        ring_values = filtered_img[ring_mask]
+        ring_pixel_counts.append(int(ring_values.size))
+        if ring_values.size == 0:
+            features.extend((0.0, 0.0))
+            continue
+        valid_ring_count += 1
+        features.extend((float(np.mean(ring_values)), float(np.var(ring_values))))
 
     return {
-        "orientation_code": best_index.astype(int).tolist(),
-        "orientation_mask": block_mask.astype(np.uint8).tolist(),
-        "orientation_histogram": [round(float(value), 6) for value in histogram.tolist()],
+        "features": features,
+        "valid_ring_count": valid_ring_count,
+        "ring_pixel_counts": ring_pixel_counts,
+    }
+
+
+def _extract_palmcode_quality(response_stack: np.ndarray, normalized_mask: np.ndarray) -> dict[str, Any]:
+    magnitude_stack = np.abs(response_stack)
+    block_size = max(2, int(config.PALM_CODE_BLOCK_SIZE))
+    block_responses = _block_reduce_3d(magnitude_stack, block_size)
+    block_mask = _block_reduce_2d((normalized_mask > 0).astype(np.float32), block_size) >= 0.35
+
+    active_blocks = int(np.count_nonzero(block_mask))
+    if active_blocks == 0:
+        return {
+            "active_blocks": 0,
+            "line_strength": 0.0,
+            "orientation_confidence": 0.0,
+            "orientation_histogram": _round_vector(np.zeros(response_stack.shape[0], dtype=np.float32)),
+        }
+
+    best_response = np.max(block_responses, axis=0)
+    if block_responses.shape[0] > 1:
+        second_response = np.partition(block_responses, -2, axis=0)[-2]
+    else:
+        second_response = np.zeros_like(best_response)
+
+    best_index = np.argmax(block_responses, axis=0).astype(np.uint8)
+    line_strength = float(best_response[block_mask].mean())
+    orientation_confidence = float(
+        ((best_response - second_response) / np.maximum(best_response, 1e-6))[block_mask].mean()
+    )
+
+    histogram = np.bincount(best_index[block_mask], minlength=response_stack.shape[0]).astype(np.float32)
+    histogram /= max(float(histogram.sum()), 1.0)
+    return {
         "active_blocks": active_blocks,
         "line_strength": round(line_strength, 6),
         "orientation_confidence": round(orientation_confidence, 6),
+        "orientation_histogram": _round_vector(histogram),
     }
+
+
+def _build_palmcode_vector_from_stack(response_stack: np.ndarray, normalized_mask: np.ndarray) -> list[float]:
+    palmcode: list[float] = []
+    for response in response_stack:
+        ring_features = _extract_concentric_ring_features(response, normalized_mask)
+        palmcode.extend(ring_features["features"])
+    return _round_vector(palmcode)
+
+
+def build_palmcode_vector(normalized_gray: np.ndarray, normalized_mask: np.ndarray) -> list[float]:
+    response_stack = _palmcode_response_stack(normalized_gray)
+    return _build_palmcode_vector_from_stack(response_stack, normalized_mask)
+
+
+def compare_palmcodes(code_a: list[float], code_b: list[float]) -> float:
+    vector_a = np.array(code_a, dtype=np.float32)
+    vector_b = np.array(code_b, dtype=np.float32)
+    size = min(vector_a.size, vector_b.size)
+    if size == 0:
+        return 0.0
+
+    vector_a = vector_a[:size]
+    vector_b = vector_b[:size]
+    numerator = float(np.dot(vector_a, vector_b))
+    denominator = float(np.linalg.norm(vector_a) * np.linalg.norm(vector_b))
+    if denominator <= 1e-8:
+        return 0.0
+    return float(numerator / denominator)
 
 
 def _extract_histogram(image: np.ndarray, mask: np.ndarray | None) -> list[float]:
@@ -931,18 +1018,29 @@ def _profile_texture_fill_ratio(profile: dict[str, Any]) -> float:
 def generate_biometric_key(profile: dict[str, Any]) -> str:
     palmprint = profile.get("palmprint", {})
     geometry = palmprint.get("geometry", {})
+    palmcode_vector = palmprint.get("palmcode_vector", [])
     hand_pattern = profile.get("hand_pattern", {})
-    payload = {
-        "aspect_ratio": round(float(geometry.get("aspect_ratio", 0.0)), 4),
-        "solidity": round(float(geometry.get("solidity", 0.0)), 4),
-        "extent": round(float(geometry.get("extent", 0.0)), 4),
-        "valley_span_ratio": round(float(geometry.get("valley_span_ratio", 0.0)), 4),
-        "contour_signature": [round(float(value), 4) for value in hand_pattern.get("contour_signature", [])[:32]],
-        "finger_lengths": [round(float(value), 4) for value in hand_pattern.get("finger_lengths", [])],
-        "finger_widths": [round(float(value), 4) for value in hand_pattern.get("finger_widths", [])],
-        "palm_width_ratio": round(float(hand_pattern.get("palm_width_ratio", 0.0)), 4),
-        "width_profile": [round(float(value), 4) for value in hand_pattern.get("width_profile", [])[:24]],
-    }
+    if palmcode_vector:
+        payload = {
+            "schema_version": profile.get("schema_version", ""),
+            "aspect_ratio": round(float(geometry.get("aspect_ratio", 0.0)), 4),
+            "solidity": round(float(geometry.get("solidity", 0.0)), 4),
+            "extent": round(float(geometry.get("extent", 0.0)), 4),
+            "valley_span_ratio": round(float(geometry.get("valley_span_ratio", 0.0)), 4),
+            "palmcode_vector": [round(float(value), 4) for value in palmcode_vector],
+        }
+    else:
+        payload = {
+            "aspect_ratio": round(float(geometry.get("aspect_ratio", 0.0)), 4),
+            "solidity": round(float(geometry.get("solidity", 0.0)), 4),
+            "extent": round(float(geometry.get("extent", 0.0)), 4),
+            "valley_span_ratio": round(float(geometry.get("valley_span_ratio", 0.0)), 4),
+            "contour_signature": [round(float(value), 4) for value in hand_pattern.get("contour_signature", [])[:32]],
+            "finger_lengths": [round(float(value), 4) for value in hand_pattern.get("finger_lengths", [])],
+            "finger_widths": [round(float(value), 4) for value in hand_pattern.get("finger_widths", [])],
+            "palm_width_ratio": round(float(hand_pattern.get("palm_width_ratio", 0.0)), 4),
+            "width_profile": [round(float(value), 4) for value in hand_pattern.get("width_profile", [])[:24]],
+        }
     serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
@@ -961,7 +1059,9 @@ def _analyze_profile(
     geometry = _extract_geometry(contour, gray_frame.shape, valleys)
     normalized = _normalize_palm_roi(gray_frame, hand_mask, contour, valleys)
     enhanced_gray, binary_lines = _enhance_palm_lines(normalized["normalized_gray"], normalized["normalized_mask"])
-    orientation_template = _extract_orientation_template(enhanced_gray, normalized["normalized_mask"])
+    palmcode_responses = _palmcode_response_stack(enhanced_gray)
+    palmcode_vector = _build_palmcode_vector_from_stack(palmcode_responses, normalized["normalized_mask"])
+    palmcode_quality = _extract_palmcode_quality(palmcode_responses, normalized["normalized_mask"])
     hand_pattern = _extract_hand_pattern_features(normalized["normalized_mask"])
 
     hand_pixels = max(int(np.count_nonzero(normalized["normalized_mask"])), 1)
@@ -971,17 +1071,17 @@ def _analyze_profile(
     mask_fill_ratio = hand_pixels / float(max(normalized["normalized_mask"].size, 1))
     quality = {
         "hand_area": geometry["area"],
-        "keypoints": orientation_template["active_blocks"],
+        "keypoints": palmcode_quality["active_blocks"],
         "mask_fill_ratio": round(mask_fill_ratio, 4),
         "texture_density": round(texture_density, 4),
-        "line_strength": orientation_template["line_strength"],
-        "orientation_confidence": orientation_template["orientation_confidence"],
+        "line_strength": palmcode_quality["line_strength"],
+        "orientation_confidence": palmcode_quality["orientation_confidence"],
         "sharpness": round(sharpness, 4),
         "score": _quality_score(
             mask_fill_ratio,
-            orientation_template["active_blocks"],
-            orientation_template["line_strength"],
-            orientation_template["orientation_confidence"],
+            palmcode_quality["active_blocks"],
+            palmcode_quality["line_strength"],
+            palmcode_quality["orientation_confidence"],
             sharpness,
         ),
     }
@@ -991,7 +1091,7 @@ def _analyze_profile(
         raise ValueError(f"Capture palmaire invalide: {validation['reason']}")
 
     profile = {
-        "schema_version": "4.0",
+        "schema_version": "5.0",
         "sensor": {
             "camera": "raspberry-pi-noir-v2",
             "preprocessing": [
@@ -999,17 +1099,25 @@ def _analyze_profile(
                 "clahe",
                 "hand_contour",
                 "whole_hand_alignment",
+                "gabor_multi_orientation",
+                "concentric_ring_statistics",
                 "contour_signature",
                 "finger_width_length_profile",
             ],
         },
-        "modalities": ["hand_pattern", "hand_geometry", "finger_geometry"],
+        "modalities": ["palmcode", "hand_pattern", "hand_geometry", "finger_geometry"],
         "palmprint": {
             "geometry": geometry,
             "intensity_histogram": _extract_histogram(enhanced_gray, normalized["normalized_mask"]),
-            "orientation_histogram": orientation_template["orientation_histogram"],
-            "orientation_code": orientation_template["orientation_code"],
-            "orientation_mask": orientation_template["orientation_mask"],
+            "palmcode_vector": palmcode_vector,
+            "palmcode_metadata": {
+                "orientation_count": len(_gabor_kernels()),
+                "ring_count": max(1, int(config.PALM_CODE_RING_COUNT)),
+                "ring_overlap": round(float(config.PALM_CODE_RING_OVERLAP), 4),
+                "feature_order": ["mean", "variance"],
+                "vector_length": len(palmcode_vector),
+                "orientation_histogram": palmcode_quality["orientation_histogram"],
+            },
             "quality": quality,
             "orb_signature": [],
             "descriptor_rows": [],
@@ -1117,40 +1225,51 @@ def _probabilistic_similarity(live_values: list[float], mean_values: list[float]
     return max(0.0, 1.0 - distance)
 
 
-def _merge_orientation_templates(samples: list[dict[str, Any]]) -> tuple[list[list[int]], list[list[int]], list[float]]:
-    codes = np.stack(
-        [np.array(sample["palmprint"]["orientation_code"], dtype=np.uint8) for sample in samples],
-        axis=0,
-    )
-    masks = np.stack(
-        [np.array(sample["palmprint"]["orientation_mask"], dtype=np.uint8) > 0 for sample in samples],
-        axis=0,
-    )
-    orientation_count = max(4, int(config.PALM_CODE_ORIENTATIONS))
-    votes = np.stack(
-        [np.sum((codes == index) & masks, axis=0) for index in range(orientation_count)],
-        axis=0,
-    )
-    fused_mask = masks.any(axis=0)
-    fused_code = np.argmax(votes, axis=0).astype(np.uint8)
-    fused_code[~fused_mask] = 0
+def _merge_palmcode_vectors(samples: list[dict[str, Any]]) -> tuple[list[float], dict[str, Any]]:
+    vectors = [
+        np.array(sample.get("palmprint", {}).get("palmcode_vector", []), dtype=np.float32)
+        for sample in samples
+        if sample.get("palmprint", {}).get("palmcode_vector")
+    ]
+    if not vectors:
+        return [], {
+            "orientation_count": len(_gabor_kernels()),
+            "ring_count": max(1, int(config.PALM_CODE_RING_COUNT)),
+            "ring_overlap": round(float(config.PALM_CODE_RING_OVERLAP), 4),
+            "feature_order": ["mean", "variance"],
+            "vector_length": 0,
+        }
 
-    histogram = np.zeros(orientation_count, dtype=np.float32)
-    if np.count_nonzero(fused_mask):
-        valid_codes = fused_code[fused_mask]
-        histogram = np.bincount(valid_codes, minlength=orientation_count).astype(np.float32)
-        histogram /= max(float(histogram.sum()), 1.0)
+    vector_length = min(vector.size for vector in vectors)
+    stacked = np.stack([vector[:vector_length] for vector in vectors], axis=0)
+    fused_vector = stacked.mean(axis=0)
 
-    return (
-        fused_code.astype(int).tolist(),
-        fused_mask.astype(np.uint8).tolist(),
-        [round(float(value), 6) for value in histogram.tolist()],
-    )
+    orientation_histograms = [
+        np.array(
+            sample.get("palmprint", {}).get("palmcode_metadata", {}).get("orientation_histogram", []),
+            dtype=np.float32,
+        )
+        for sample in samples
+        if sample.get("palmprint", {}).get("palmcode_metadata", {}).get("orientation_histogram")
+    ]
+    histogram: list[float] = []
+    if orientation_histograms:
+        histogram_length = min(item.size for item in orientation_histograms)
+        histogram = _round_vector(np.stack([item[:histogram_length] for item in orientation_histograms], axis=0).mean(axis=0))
+
+    return _round_vector(fused_vector), {
+        "orientation_count": len(_gabor_kernels()),
+        "ring_count": max(1, int(config.PALM_CODE_RING_COUNT)),
+        "ring_overlap": round(float(config.PALM_CODE_RING_OVERLAP), 4),
+        "feature_order": ["mean", "variance"],
+        "vector_length": int(vector_length),
+        "orientation_histogram": histogram,
+    }
 
 
 def _merge_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
     base = samples[0]
-    fused_code, fused_mask, fused_histogram = _merge_orientation_templates(samples)
+    fused_palmcode_vector, fused_palmcode_metadata = _merge_palmcode_vectors(samples)
     geometry = {
         "area": round(_mean_numeric([sample["palmprint"]["geometry"]["area"] for sample in samples]), 4),
         "perimeter": round(_mean_numeric([sample["palmprint"]["geometry"]["perimeter"] for sample in samples]), 4),
@@ -1199,7 +1318,7 @@ def _merge_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
     fused = {
-        "schema_version": "4.0",
+        "schema_version": "5.0",
         "sensor": base["sensor"],
         "modalities": base["modalities"],
         "palmprint": {
@@ -1208,9 +1327,8 @@ def _merge_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
                 round(_mean_numeric([sample["palmprint"]["intensity_histogram"][index] for sample in samples]), 6)
                 for index in range(histogram_length)
             ],
-            "orientation_histogram": fused_histogram,
-            "orientation_code": fused_code,
-            "orientation_mask": fused_mask,
+            "palmcode_vector": fused_palmcode_vector,
+            "palmcode_metadata": fused_palmcode_metadata,
             "quality": {
                 "hand_area": round(_mean_numeric([sample["palmprint"]["quality"]["hand_area"] for sample in samples]), 4),
                 "keypoints": int(round(_mean_numeric([sample["palmprint"]["quality"]["keypoints"] for sample in samples]))),
@@ -1271,7 +1389,7 @@ def build_enrollment_profile(
     fused["captured_frame_count"] = len(frames_bgr)
     fused["rejected_samples"] = rejected_samples
     fused["sample_keys"] = [sample["biometric_key"] for sample in samples]
-    fused["fusion_mode"] = "anatomical_roi_compcode_consensus"
+    fused["fusion_mode"] = "anatomical_roi_palmcode_mean"
     fused["debug_processed_images"] = debug_processed_images
     fused["probabilistic_model"] = _probabilistic_model_from_samples(samples)
     fused["biometric_key"] = hashlib.sha256("|".join(fused["sample_keys"]).encode("utf-8")).hexdigest()
@@ -1295,7 +1413,7 @@ def build_identification_profile(frames_bgr: list[np.ndarray]) -> dict[str, Any]
     fused["sample_count"] = len(samples)
     fused["captured_frame_count"] = len(frames_bgr)
     fused["rejected_samples"] = rejected_samples
-    fused["fusion_mode"] = "scan_best_orientation_template"
+    fused["fusion_mode"] = "scan_palmcode_mean"
     fused["sample_keys"] = [sample["biometric_key"] for sample in samples]
     fused["feature_vector"] = _feature_vector_from_profile(fused)
     fused["biometric_key"] = hashlib.sha256("|".join(fused["sample_keys"]).encode("utf-8")).hexdigest()
@@ -1307,6 +1425,28 @@ def _relative_score(value_a: float, value_b: float) -> float:
     return min(abs(value_a - value_b) / denominator, 1.0)
 
 
+def _profile_palmcode_vector(profile: dict[str, Any]) -> list[float]:
+    return [float(value) for value in profile.get("palmprint", {}).get("palmcode_vector", [])]
+
+
+def _geometry_similarity(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> float:
+    live_geometry = live_profile.get("palmprint", {}).get("geometry", {})
+    stored_geometry = stored_profile.get("palmprint", {}).get("geometry", {})
+    dimensions = (
+        ("aspect_ratio", 1.0),
+        ("solidity", 1.0),
+        ("extent", 1.0),
+        ("valley_span_ratio", 1.0),
+    )
+    penalties = [
+        _relative_score(float(live_geometry.get(name, 0.0)), float(stored_geometry.get(name, 0.0))) * weight
+        for name, weight in dimensions
+    ]
+    if not penalties:
+        return 0.0
+    return float(np.clip(1.0 - (sum(penalties) / len(penalties)), 0.0, 1.0))
+
+
 def _vector_score(values_a: list[float], values_b: list[float]) -> float:
     a = np.array(values_a, dtype=np.float32)
     b = np.array(values_b, dtype=np.float32)
@@ -1316,23 +1456,6 @@ def _vector_score(values_a: list[float], values_b: list[float]) -> float:
     a = a[:size]
     b = b[:size]
     return float(np.mean(np.abs(a - b)))
-
-
-def _orientation_code_score(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> float:
-    live_code = np.array(live_profile["palmprint"]["orientation_code"], dtype=np.int16)
-    ref_code = np.array(stored_profile["palmprint"]["orientation_code"], dtype=np.int16)
-    live_mask = np.array(live_profile["palmprint"]["orientation_mask"], dtype=np.uint8) > 0
-    ref_mask = np.array(stored_profile["palmprint"]["orientation_mask"], dtype=np.uint8) > 0
-
-    overlap = live_mask & ref_mask
-    overlap_count = int(np.count_nonzero(overlap))
-    if overlap_count == 0:
-        return 1.0
-
-    orientation_count = max(4, int(config.PALM_CODE_ORIENTATIONS))
-    delta = np.abs(live_code - ref_code)
-    circular_delta = np.minimum(delta, orientation_count - delta).astype(np.float32)
-    return float(np.mean(circular_delta[overlap] / max(orientation_count / 2.0, 1.0)))
 
 
 def _compare_legacy_profiles(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> dict[str, Any]:
@@ -1383,7 +1506,41 @@ def _compare_legacy_profiles(live_profile: dict[str, Any], stored_profile: dict[
     }
 
 
+def _compare_palmcode_profiles(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> dict[str, Any]:
+    palmcode_similarity = compare_palmcodes(_profile_palmcode_vector(live_profile), _profile_palmcode_vector(stored_profile))
+    geometry_similarity = _geometry_similarity(live_profile, stored_profile)
+    live_quality = live_profile["palmprint"].get("quality", {})
+    live_validation = live_quality.get("validation", {})
+    quality_gate_passed = live_validation.get("valid", True) and live_quality.get("score", 0.0) >= config.MIN_CAPTURE_QUALITY
+    score_gate_passed = palmcode_similarity >= config.PALMCODE_MATCH_THRESHOLD
+
+    return {
+        "match": bool(quality_gate_passed and score_gate_passed),
+        "score": round(float(palmcode_similarity), 4),
+        "threshold": config.PALMCODE_MATCH_THRESHOLD,
+        "quality_gate_passed": quality_gate_passed,
+        "quality_reason": live_validation.get("reason"),
+        "components": {
+            "palmcode": round(float(palmcode_similarity), 4),
+            "orientation": None,
+            "geometry": round(float(geometry_similarity), 4),
+            "finger_lengths": None,
+            "finger_widths": None,
+            "palm_width": None,
+            "width_profile": None,
+            "contour": None,
+            "orb": None,
+            "histogram": None,
+            "texture_density": round(float(live_quality.get("texture_density", 0.0)), 4),
+            "alignment": None,
+            "hu": None,
+        },
+    }
+
+
 def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> dict[str, Any]:
+    if _profile_palmcode_vector(live_profile) and _profile_palmcode_vector(stored_profile):
+        return _compare_palmcode_profiles(live_profile, stored_profile)
     if not stored_profile.get("probabilistic_model"):
         return _compare_legacy_profiles(live_profile, stored_profile)
     model = stored_profile["probabilistic_model"]
@@ -1470,6 +1627,7 @@ def verify_live_profile(live_profile: dict[str, Any], stored_profile: dict[str, 
 
 def _average_components(results: list[dict[str, Any]]) -> dict[str, float | None]:
     component_names = (
+        "palmcode",
         "orientation",
         "geometry",
         "finger_lengths",
