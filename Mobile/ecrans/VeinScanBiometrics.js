@@ -11,11 +11,15 @@ import {
   Animated,
   Platform,
   useWindowDimensions,
+  Image,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { COLORS, GRADIENTS } from '../theme';
+import { useMqttStore } from '../store/mqttStore';
+import { MQTT_TOPICS } from '../config';
 
 function QualityBar({ label, value, color }) {
   const animWidth = useRef(new Animated.Value(0)).current;
@@ -52,10 +56,6 @@ function QualityBar({ label, value, color }) {
   );
 }
 
-import { useMqttStore } from '../store/mqttStore';
-import { Alert } from 'react-native';
-import { MQTT_TOPICS } from '../config';
-
 export default function VeinScanBiometrics({ navigation }) {
   const { t } = useTranslation();
   const { width } = useWindowDimensions();
@@ -66,6 +66,14 @@ export default function VeinScanBiometrics({ navigation }) {
 
   const isConnected = useMqttStore((state) => state.isConnected);
   const triggerScan = useMqttStore((state) => state.triggerScan);
+  const telemetry = useMqttStore((state) => state.telemetry);
+  const lastScanResult = useMqttStore((state) => state.lastScanResult);
+  const previewBase64 = telemetry?.camera?.preview_jpeg_base64;
+  const previewUri = previewBase64 ? `data:image/jpeg;base64,${previewBase64}` : null;
+
+  const geometryQuality = Math.max(0, Math.min(100, Math.round((1 - (lastScanResult?.components?.geometry || 0)) * 100)));
+  const orbQuality = Math.max(0, Math.min(100, Math.round((1 - (lastScanResult?.components?.orb || 0)) * 100)));
+  const alignmentQuality = Math.max(0, Math.min(100, Math.round((1 - (lastScanResult?.components?.hu || 0)) * 100)));
 
   useEffect(() => {
     if (scanning) {
@@ -80,19 +88,27 @@ export default function VeinScanBiometrics({ navigation }) {
     }
   }, [scanning]);
 
-  const handleScanToggle = () => {
+  const handleScanToggle = async () => {
     if (!isConnected) {
         Alert.alert(t('veinScan.offlineTitle'), t('veinScan.offlineDesc'));
         return;
     }
 
     if (!scanning) {
-        triggerScan(userId || 'demo-user').catch(() => {
+        setScanning(true);
+        try {
+          const response = await triggerScan(userId.trim() || undefined);
+          if (response?.status === 'success') {
+            navigation?.navigate('AccessDecision', { event: response.event });
+          } else {
+            Alert.alert(t('veinScan.scanErrorTitle'), response?.reason || t('veinScan.scanErrorDesc'));
+          }
+        } catch {
           setScanning(false);
           Alert.alert(t('veinScan.scanErrorTitle'), t('veinScan.scanErrorDesc'));
-        });
-        setScanning(true);
-        Alert.alert(t('veinScan.scanStartedTitle'), t('veinScan.scanStartedDesc'));
+          return;
+        }
+        setScanning(false);
     } else {
         setScanning(false);
     }
@@ -136,7 +152,11 @@ export default function VeinScanBiometrics({ navigation }) {
             <View style={styles.cornerBR} />
             
             <View style={styles.hologramContainer}>
-              <Ionicons name="hand-left" size={80} color={scanning ? COLORS.neonCyan : 'rgba(255,255,255,0.1)'} />
+              {previewUri ? (
+                <Image source={{ uri: previewUri }} style={styles.previewImage} resizeMode="cover" />
+              ) : (
+                <Ionicons name="hand-left" size={80} color={scanning ? COLORS.neonCyan : 'rgba(255,255,255,0.1)'} />
+              )}
               {scanning && (
                 <Animated.View 
                   style={[
@@ -167,7 +187,7 @@ export default function VeinScanBiometrics({ navigation }) {
             </View>
 
             <View style={[styles.frameFooter, isCompact && styles.frameFooterCompact]}>
-              <Text numberOfLines={1} style={styles.frameMeta}>{t('veinScan.coordinates')}: 42.0 // 18.5</Text>
+              <Text numberOfLines={1} style={styles.frameMeta}>{t('veinScan.coordinates')}: {telemetry?.device_id || 'BG-MULTI-01'}</Text>
               <Text numberOfLines={1} style={styles.frameMeta}>{t('veinScan.topicLabel')}: {MQTT_TOPICS.scanCmd}</Text>
             </View>
           </View>
@@ -194,9 +214,9 @@ export default function VeinScanBiometrics({ navigation }) {
         <View style={styles.row}>
           <BlurView intensity={10} style={[styles.infoCard, { flex: 1 }]}>
             <Text style={styles.infoTitle}>{t('veinScan.scanQuality').toUpperCase()}</Text>
-            <QualityBar label={t('veinScan.signalStrength')} value={87} color={COLORS.neonGreen} />
-            <QualityBar label={t('veinScan.patternClarity')} value={64} color={COLORS.neonAmber} />
-            <QualityBar label={t('veinScan.alignment')} value={92} color={COLORS.neonCyan} />
+            <QualityBar label={t('veinScan.signalStrength')} value={geometryQuality} color={COLORS.neonGreen} />
+            <QualityBar label={t('veinScan.patternClarity')} value={orbQuality} color={COLORS.neonAmber} />
+            <QualityBar label={t('veinScan.alignment')} value={alignmentQuality} color={COLORS.neonCyan} />
           </BlurView>
         </View>
 
@@ -284,7 +304,8 @@ const styles = StyleSheet.create({
   cornerBL: { position: 'absolute', bottom: 15, left: 15, width: 25, height: 25, borderBottomWidth: 2, borderLeftWidth: 2, borderColor: COLORS.neonCyan },
   cornerBR: { position: 'absolute', bottom: 15, right: 15, width: 25, height: 25, borderBottomWidth: 2, borderRightWidth: 2, borderColor: COLORS.neonCyan },
   
-  hologramContainer: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(0, 242, 255, 0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0, 242, 255, 0.1)' },
+  hologramContainer: { width: 180, height: 180, borderRadius: 24, backgroundColor: 'rgba(0, 242, 255, 0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0, 242, 255, 0.1)', overflow: 'hidden' },
+  previewImage: { width: '100%', height: '100%' },
   scanLine: { position: 'absolute', width: '100%', height: 2 },
   scanLineGlow: { flex: 1 },
 

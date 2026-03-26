@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import mqtt from 'mqtt';
 import {
+  deleteUserProfile,
+  syncAccessEvent,
+  syncBiometricProfile,
+  syncTelemetry,
+  syncUserProfile,
+} from '../services/cloudSync';
+import {
   buildMqttBrokerUrl,
   MQTT_DEFAULT_HOST,
   MQTT_DEFAULT_PASSWORD,
@@ -42,6 +49,7 @@ export const useMqttStore = create((set, get) => ({
   status: 'OFFLINE',
   telemetry: null,
   settingsAck: null,
+  lastScanResult: null,
   lastError: null,
   configReady: false,
   brokerConfig: getDefaultBrokerConfig(),
@@ -133,6 +141,15 @@ export const useMqttStore = create((set, get) => ({
 
         if (topicName === MQTT_TOPICS.telemetry) {
           set({ telemetry: data });
+          const sanitizedCamera = data.camera
+            ? Object.fromEntries(
+                Object.entries(data.camera).filter(([key]) => key !== 'preview_jpeg_base64'),
+              )
+            : undefined;
+          syncTelemetry(data.device_id || 'rpi-entry-01', {
+            ...data,
+            ...(sanitizedCamera ? { camera: sanitizedCamera } : {}),
+          }).catch(() => {});
           return;
         }
 
@@ -216,20 +233,6 @@ export const useMqttStore = create((set, get) => ({
       {}
     ),
 
-  updateUser: async (payload) =>
-    get().request(
-      MQTT_TOPICS.usersUpdateCmd,
-      responseTopic('users/update', get().clientId),
-      payload
-    ),
-
-  deleteUser: async (userId) =>
-    get().request(
-      MQTT_TOPICS.usersDeleteCmd,
-      responseTopic('users/delete', get().clientId),
-      { user_id: userId }
-    ),
-
   fetchLogs: async () =>
     get().request(
       MQTT_TOPICS.logsCmd,
@@ -244,19 +247,68 @@ export const useMqttStore = create((set, get) => ({
       {}
     ),
 
-  triggerScan: async (userId) =>
-    get().request(
-      MQTT_TOPICS.scanCmd,
-      responseTopic('access/scan', get().clientId),
-      { user_id: userId }
-    ),
-
   enrollUser: async (payload) =>
     get().request(
       MQTT_TOPICS.enrollCmd,
       responseTopic('users/enroll', get().clientId),
       payload
-    ),
+    ).then(async (response) => {
+      if (response?.status === 'success') {
+        await syncUserProfile(response.user_id, {
+          user_id: response.user_id,
+          username: response.username,
+          email: payload.email,
+          department: payload.department,
+          role: payload.role,
+          biometric_key: response.biometric_key,
+          sample_count: response.sample_count,
+        }).catch(() => {});
+        await syncBiometricProfile(response.user_id, {
+          user_id: response.user_id,
+          biometric_key: response.biometric_key,
+          profile: response.profile,
+          sample_count: response.sample_count,
+        }).catch(() => {});
+      }
+      return response;
+    }),
+
+  updateUser: async (payload) =>
+    get().request(
+      MQTT_TOPICS.usersUpdateCmd,
+      responseTopic('users/update', get().clientId),
+      payload
+    ).then(async (response) => {
+      if (response?.status === 'success' && response.user) {
+        await syncUserProfile(response.user.id, response.user).catch(() => {});
+      }
+      return response;
+    }),
+
+  deleteUser: async (userId) =>
+    get().request(
+      MQTT_TOPICS.usersDeleteCmd,
+      responseTopic('users/delete', get().clientId),
+      { user_id: userId }
+    ).then(async (response) => {
+      if (response?.status === 'success') {
+        await deleteUserProfile(userId).catch(() => {});
+      }
+      return response;
+    }),
+
+  triggerScan: async (userId) =>
+    get().request(
+      MQTT_TOPICS.scanCmd,
+      responseTopic('access/scan', get().clientId),
+      userId ? { user_id: userId } : {}
+    ).then(async (response) => {
+      if (response?.event?.id) {
+        set({ lastScanResult: response });
+        await syncAccessEvent(response.event.id, response.event).catch(() => {});
+      }
+      return response;
+    }),
 
   updateSystemSettings: async (payload) =>
     get().request(

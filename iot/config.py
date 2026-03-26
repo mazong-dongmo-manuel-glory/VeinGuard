@@ -79,6 +79,10 @@ MATCH_THRESHOLD = float(os.getenv("VG_MATCH_THRESHOLD", "0.33"))
 MIN_HAND_AREA = int(os.getenv("VG_MIN_HAND_AREA", "3500"))
 CAMERA_WIDTH = int(os.getenv("VG_CAMERA_WIDTH", "640"))
 CAMERA_HEIGHT = int(os.getenv("VG_CAMERA_HEIGHT", "480"))
+CAMERA_PREVIEW_WIDTH = int(os.getenv("VG_CAMERA_PREVIEW_WIDTH", "320"))
+CAMERA_PREVIEW_QUALITY = int(os.getenv("VG_CAMERA_PREVIEW_QUALITY", "60"))
+ENROLLMENT_SAMPLE_COUNT = int(os.getenv("VG_ENROLLMENT_SAMPLE_COUNT", "3"))
+TELEMETRY_INTERVAL_SECONDS = float(os.getenv("VG_TELEMETRY_INTERVAL_SECONDS", "1.0"))
 
 # Firebase
 FIREBASE_ENABLED = os.getenv("VG_FIREBASE_ENABLED", "0").lower() in {"1", "true", "yes", "on"}

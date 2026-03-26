@@ -244,6 +244,30 @@ def get_biometric_profile(user_id: str) -> dict | None:
     return json.loads(row["profile_json"]) if row else None
 
 
+def list_biometric_profiles() -> list[dict]:
+    conn = get_db_connection()
+    rows = conn.execute(
+        """
+        SELECT u.id, u.username, u.email, u.role, u.department, bp.profile_json
+        FROM biometric_profiles bp
+        JOIN users u ON u.id = bp.user_id
+        ORDER BY u.created_at DESC
+        """
+    ).fetchall()
+    conn.close()
+    return [
+        {
+            "user_id": row["id"],
+            "username": row["username"],
+            "email": row["email"],
+            "role": row["role"],
+            "department": row["department"],
+            "profile": json.loads(row["profile_json"]),
+        }
+        for row in rows
+    ]
+
+
 def log_access_event(
     event_id: str,
     user_id: str | None,

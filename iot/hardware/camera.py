@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import logging
 from pathlib import Path
 
@@ -44,6 +45,17 @@ class AccessCamera(Camera):
         frame = self.capture_array()
         ok, encoded = cv2.imencode(".jpg", frame)
         return encoded.tobytes() if ok else b""
+
+    def capture_preview_base64(self, width: int = 320, quality: int = 60) -> str:
+        frame = self.capture_array()
+        if width and frame.shape[1] > width:
+            ratio = width / float(frame.shape[1])
+            height = int(frame.shape[0] * ratio)
+            frame = cv2.resize(frame, (width, height))
+        ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+        if not ok:
+            return ""
+        return base64.b64encode(encoded.tobytes()).decode("ascii")
 
     def capture_to_file(self, file_path: str | Path) -> str:
         file_path = str(file_path)

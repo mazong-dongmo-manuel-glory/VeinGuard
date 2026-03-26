@@ -13,6 +13,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import config
 import database
 from biometrics.biometrics_service import build_multimodal_profile, verify_multimodal
+from biometrics.biometrics_service import build_enrollment_profile
 from cloud.firebase_service import FirebaseService
 from core.security_controller import SecurityController
 
@@ -94,11 +95,6 @@ class BioGuardMQTTGateway:
         response_topic = config.response_topic("access/scan", client_id)
         user_id = data.get("user_id")
 
-        if not user_id:
-            self.controller.handle_access_denied("ID requis")
-            self.client.publish(response_topic, json.dumps({"status": "error", "error": "Missing user_id"}))
-            return
-
         try:
             capture = self.controller.capture_attempt(claimed_user_id=user_id)
         except Exception as exc:
@@ -106,24 +102,47 @@ class BioGuardMQTTGateway:
             self.client.publish(response_topic, json.dumps({"status": "error", "error": str(exc)}))
             return
 
-        stored_profile = database.get_biometric_profile(user_id) or self.firebase.get_biometric_profile(user_id)
-        if not stored_profile:
+        matched_user = None
+        if user_id:
+            stored_profile = database.get_biometric_profile(user_id) or self.firebase.get_biometric_profile(user_id)
+            if stored_profile:
+                matched_user = {
+                    "user_id": user_id,
+                    "username": data.get("username") or user_id,
+                    "profile": stored_profile,
+                }
+        else:
+            candidates = database.list_biometric_profiles()
+            best_candidate = None
+            for candidate in candidates:
+                result = verify_multimodal(capture["frame"], candidate["profile"])
+                if best_candidate is None or result["score"] < best_candidate["result"]["score"]:
+                    best_candidate = {"candidate": candidate, "result": result}
+            if best_candidate and best_candidate["result"]["match"]:
+                matched_user = {
+                    "user_id": best_candidate["candidate"]["user_id"],
+                    "username": best_candidate["candidate"]["username"],
+                    "profile": best_candidate["candidate"]["profile"],
+                    "prefetched_result": best_candidate["result"],
+                }
+
+        if not matched_user:
             self.controller.handle_access_denied("Profil absent")
             self._record_access(
                 user_id=user_id,
                 username=data.get("username"),
                 status="DENIED",
                 score=None,
-                reason="PROFILE_NOT_FOUND",
+                reason="PROFILE_NOT_FOUND" if user_id else "NO_MATCH_FOUND",
                 method="multimodal_scan",
                 modalities={"telemetry": capture["telemetry"]},
             )
-            self.client.publish(response_topic, json.dumps({"status": "fail", "reason": "PROFILE_NOT_FOUND"}))
+            self.client.publish(response_topic, json.dumps({"status": "fail", "reason": "PROFILE_NOT_FOUND" if user_id else "NO_MATCH_FOUND"}))
             return
 
-        result = verify_multimodal(capture["frame"], stored_profile)
+        result = matched_user.get("prefetched_result") or verify_multimodal(capture["frame"], matched_user["profile"])
         if result["match"]:
-            self.controller.handle_access_granted(user_id, result["score"])
+            self.controller.handle_access_granted(matched_user["username"], result["score"])
             status = "GRANTED"
             reason = "MATCH"
         else:
@@ -132,14 +151,15 @@ class BioGuardMQTTGateway:
             reason = "BIOMETRIC_MISMATCH"
 
         event = self._record_access(
-            user_id=user_id,
-            username=data.get("username"),
+            user_id=matched_user["user_id"],
+            username=matched_user["username"],
             status=status,
             score=result["score"],
             reason=reason,
             method="multimodal_scan",
             modalities={
                 "components": result["components"],
+                "biometric_key": result["live_profile"]["biometric_key"],
                 "telemetry": capture["telemetry"],
                 "preview_path": capture["preview_path"],
             },
@@ -148,6 +168,9 @@ class BioGuardMQTTGateway:
         response = {
             "status": "success",
             "result": status,
+            "user_id": matched_user["user_id"],
+            "username": matched_user["username"],
+            "biometric_key": result["live_profile"]["biometric_key"],
             "score": result["score"],
             "threshold": result["threshold"],
             "components": result["components"],
@@ -170,9 +193,20 @@ class BioGuardMQTTGateway:
 
         self.controller.handle_enrollment(user_id)
 
+        enrollment_frames = []
+        preview_paths = []
         try:
-            capture = self.controller.capture_attempt(claimed_user_id=user_id)
-            profile = build_multimodal_profile(capture["frame"])
+            for index in range(config.ENROLLMENT_SAMPLE_COUNT):
+                self.controller.lcd.show_message(
+                    f"Angle {index + 1}/{config.ENROLLMENT_SAMPLE_COUNT}",
+                    user_id[: config.LCD_COLS],
+                )
+                capture = self.controller.capture_attempt(claimed_user_id=f"{user_id}_{index + 1}")
+                enrollment_frames.append(capture["frame"])
+                if capture["preview_path"]:
+                    preview_paths.append(capture["preview_path"])
+                time.sleep(0.4)
+            profile = build_enrollment_profile(enrollment_frames)
         except Exception as exc:
             self.client.publish(response_topic, json.dumps({"status": "error", "error": str(exc)}))
             return
@@ -207,7 +241,11 @@ class BioGuardMQTTGateway:
                     "status": "success",
                     "user_id": user_id,
                     "username": username,
+                    "biometric_key": profile["biometric_key"],
+                    "sample_count": profile.get("sample_count", 1),
                     "profile_modalities": profile["modalities"],
+                    "profile": profile,
+                    "preview_paths": preview_paths,
                 }
             ),
         )
@@ -363,7 +401,7 @@ class BioGuardMQTTGateway:
         self.client.publish(config.MQTT_TOPIC_STATUS, json.dumps(payload))
 
     def publish_telemetry(self) -> None:
-        payload = self.controller.sensor_snapshot()
+        payload = self.controller.sensor_snapshot(include_preview=True)
         database.update_device_state("last_telemetry", payload)
         self.firebase.save_telemetry(config.DEVICE_ID, payload)
         self.client.publish(config.MQTT_TOPIC_TELEMETRY, json.dumps(payload))
@@ -410,7 +448,7 @@ class BioGuardMQTTGateway:
         try:
             while True:
                 self.publish_telemetry()
-                time.sleep(3)
+                time.sleep(config.TELEMETRY_INTERVAL_SECONDS)
         except KeyboardInterrupt:
             logger.info("Shutdown requested")
         finally:

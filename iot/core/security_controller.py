@@ -101,8 +101,14 @@ class SecurityController:
             "ambient": light,
         }
 
-    def sensor_snapshot(self) -> dict:
+    def sensor_snapshot(self, include_preview: bool = False) -> dict:
         lighting = self.sync_lighting()
+        camera_snapshot = self.camera.snapshot()
+        if include_preview:
+            camera_snapshot["preview_jpeg_base64"] = self.camera.capture_preview_base64(
+                width=config.CAMERA_PREVIEW_WIDTH,
+                quality=config.CAMERA_PREVIEW_QUALITY,
+            )
         return {
             "captured_at": datetime.now(timezone.utc).isoformat(),
             "device_id": config.DEVICE_ID,
@@ -116,7 +122,7 @@ class SecurityController:
             },
             "buzzer": self.buzzer.snapshot(),
             "lcd": self.lcd.snapshot(),
-            "camera": self.camera.snapshot(),
+            "camera": camera_snapshot,
         }
 
     def capture_attempt(self, claimed_user_id: str | None = None, persist_preview: bool = True) -> dict:

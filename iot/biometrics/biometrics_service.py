@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from math import log10
 from pathlib import Path
@@ -120,7 +121,7 @@ def build_multimodal_profile(frame_bgr: np.ndarray) -> dict[str, Any]:
         "mask_fill_ratio": round(float(np.count_nonzero(mask)) / float(mask.size), 4),
     }
 
-    return {
+    profile = {
         "schema_version": "2.0",
         "modalities": ["palmprint", "finger_geometry"],
         "palmprint": {
@@ -133,6 +134,37 @@ def build_multimodal_profile(frame_bgr: np.ndarray) -> dict[str, Any]:
             "estimated_finger_peaks": geometry["finger_peaks"],
         },
     }
+    profile["biometric_key"] = generate_biometric_key(profile)
+    return profile
+
+
+def generate_biometric_key(profile: dict[str, Any]) -> str:
+    geometry = profile["palmprint"]["geometry"]
+    payload = {
+        "area": round(float(geometry["area"]), 2),
+        "perimeter": round(float(geometry["perimeter"]), 2),
+        "aspect_ratio": round(float(geometry["aspect_ratio"]), 4),
+        "solidity": round(float(geometry["solidity"]), 4),
+        "convexity_defects": int(geometry["convexity_defects"]),
+        "finger_peaks": int(geometry["finger_peaks"]),
+        "hu": [round(float(value), 4) for value in geometry["hu"]],
+        "orb_signature": [round(float(value), 2) for value in profile["palmprint"]["orb_signature"]],
+    }
+    serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def build_enrollment_profile(frames_bgr: list[np.ndarray]) -> dict[str, Any]:
+    samples = [build_multimodal_profile(frame) for frame in frames_bgr]
+    if not samples:
+        raise ValueError("Aucun echantillon biométrique capturé.")
+
+    primary = dict(samples[0])
+    primary["samples"] = samples
+    primary["sample_count"] = len(samples)
+    primary["sample_keys"] = [sample["biometric_key"] for sample in samples]
+    primary["biometric_key"] = hashlib.sha256("|".join(primary["sample_keys"]).encode("utf-8")).hexdigest()
+    return primary
 
 
 def _relative_score(value_a: float, value_b: float) -> float:
@@ -140,9 +172,7 @@ def _relative_score(value_a: float, value_b: float) -> float:
     return abs(value_a - value_b) / denominator
 
 
-def verify_multimodal(frame_bgr: np.ndarray, stored_profile: dict) -> dict[str, Any]:
-    live_profile = build_multimodal_profile(frame_bgr)
-
+def _compare_profiles(live_profile: dict[str, Any], stored_profile: dict[str, Any]) -> dict[str, Any]:
     live_geometry = live_profile["palmprint"]["geometry"]
     ref_geometry = stored_profile["palmprint"]["geometry"]
 
@@ -177,6 +207,24 @@ def verify_multimodal(frame_bgr: np.ndarray, stored_profile: dict) -> dict[str, 
             "hu": round(float(hu_score), 4),
             "orb": round(float(orb_score), 4),
         },
+    }
+
+
+def verify_multimodal(frame_bgr: np.ndarray, stored_profile: dict) -> dict[str, Any]:
+    live_profile = build_multimodal_profile(frame_bgr)
+    candidates = stored_profile.get("samples") or [stored_profile]
+
+    scored_candidates = []
+    for index, candidate in enumerate(candidates):
+        comparison = _compare_profiles(live_profile, candidate)
+        scored_candidates.append((comparison["score"], index, candidate, comparison))
+
+    best_score, best_index, _, best_result = min(scored_candidates, key=lambda item: item[0])
+
+    return {
+        **best_result,
+        "score": round(float(best_score), 4),
+        "matched_sample_index": best_index,
         "live_profile": live_profile,
     }
 
