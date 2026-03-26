@@ -37,8 +37,15 @@ function StatusTag({ status, color }) {
 }
 
 function EventItem({ item, onPress }) {
+  const { t } = useTranslation();
   const statusColor = item.status === 'GRANTED' ? COLORS.neonGreen : (item.status === 'DENIED' ? COLORS.neonRed : COLORS.neonAmber);
-  const name = item.username || 'UNKNOWN OPERATIVE';
+  const name = item.username || 'UTILISATEUR INCONNU';
+  const statusLabel =
+    item.status === 'GRANTED'
+      ? t('accessHistory.granted')
+      : item.status === 'DENIED'
+        ? t('accessHistory.denied')
+        : item.status;
   
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={styles.eventItem}>
@@ -46,13 +53,13 @@ function EventItem({ item, onPress }) {
         <View style={[styles.statusLine, { backgroundColor: statusColor }]} />
         <View style={styles.eventBody}>
           <View style={styles.eventHeader}>
-            <Text style={styles.eventName}>{name.toUpperCase()}</Text>
+            <Text numberOfLines={1} style={styles.eventName}>{name.toUpperCase()}</Text>
             <Text style={styles.eventTime}>{new Date(item.timestamp).toLocaleTimeString()}</Text>
           </View>
-          <Text style={styles.eventSub}>{item.method.toUpperCase()} // PORTAL-01</Text>
+          <Text numberOfLines={1} style={styles.eventSub}>{item.method.toUpperCase()} // PORTAIL-01</Text>
           <View style={styles.eventFooter}>
-            <StatusTag status={item.status} color={statusColor} />
-            <Text style={[styles.eventScore, { color: statusColor }]}>MATCH: --</Text>
+            <StatusTag status={statusLabel} color={statusColor} />
+            <Text style={[styles.eventScore, { color: statusColor }]}>{t('accessDecision.confidence')}: --</Text>
           </View>
         </View>
       </BlurView>
@@ -133,7 +140,7 @@ export default function AccessHistory({ navigation }) {
           ))}
           {filteredLogs.length === 0 && (
             <Text style={{ color: COLORS.textDim, textAlign: 'center', marginTop: 20 }}>
-                NO VASCULAR EVENTS RECORDED
+                {t('accessHistory.noEvents')}
             </Text>
           )}
         </View>
@@ -195,11 +202,11 @@ const styles = StyleSheet.create({
   eventInner: { flexDirection: 'row', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)' },
   statusLine: { width: 4 },
   eventBody: { flex: 1, padding: 15 },
-  eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
-  eventName: { color: COLORS.white, fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
+  eventHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5, gap: 10 },
+  eventName: { color: COLORS.white, fontSize: 14, fontWeight: '800', letterSpacing: 0.5, flex: 1 },
   eventTime: { color: COLORS.textDim, fontSize: 11, fontWeight: '600' },
   eventSub: { color: COLORS.textSecondary, fontSize: 12, marginBottom: 12 },
-  eventFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  eventFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   statusTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
   statusTagText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
   eventScore: { fontSize: 12, fontWeight: '800' },

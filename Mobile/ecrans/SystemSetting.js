@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,107 +9,112 @@ import {
   Switch,
   StatusBar,
   Platform,
+  Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useLangueStore } from '../store/langueStore';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { COLORS, GRADIENTS } from '../theme';
+import { useMqttStore } from '../store/mqttStore';
 
 function SectionHeader({ icon, title, color = COLORS.neonCyan }) {
   return (
     <View style={styles.sectionHeader}>
       <Ionicons name={icon} size={20} color={color} />
-      <Text style={[styles.sectionTitle, { color }]}>{title.toUpperCase()}</Text>
+      <Text style={[styles.sectionTitle, { color }]}>{title}</Text>
     </View>
   );
 }
 
-function InputField({ label, value, onChangeText, placeholder, secure }) {
+function ToggleRow({ title, description, value, onValueChange, color }) {
   return (
-    <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <TextInput
-        style={styles.textInput}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor="rgba(255, 255, 255, 0.2)"
-        secureTextEntry={secure}
-      />
+    <View style={styles.settingRow}>
+      <View style={styles.settingCopy}>
+        <Text style={styles.settingLabel}>{title}</Text>
+        <Text style={styles.settingDesc}>{description}</Text>
+      </View>
+      <Switch value={value} onValueChange={onValueChange} trackColor={{ true: color }} />
     </View>
   );
 }
 
-function DeviceCard({ name, status, firmware, uptime, signal }) {
-  const isOnline = status === 'Online';
-  const color = isOnline ? COLORS.neonGreen : COLORS.neonAmber;
+function TelemetryItem({ label, value, accent = COLORS.white }) {
   return (
-    <BlurView intensity={10} tint="dark" style={styles.deviceCard}>
-      <View style={styles.deviceHeader}>
-        <View style={styles.deviceInfo}>
-          <View style={[styles.statusDot, { backgroundColor: color, shadowColor: color }]} />
-          <Text style={styles.deviceName}>{name}</Text>
-        </View>
-        <View style={styles.deviceTag}>
-          <Text style={[styles.deviceTagText, { color }]}>{status.toUpperCase()}</Text>
-        </View>
-      </View>
-      <View style={styles.deviceGrid}>
-        <View style={styles.gridItem}>
-          <Text style={styles.gridLabel}>FW</Text>
-          <Text style={styles.gridVal}>{firmware}</Text>
-        </View>
-        <View style={styles.gridItem}>
-          <Text style={styles.gridLabel}>UPTIME</Text>
-          <Text style={styles.gridVal}>{uptime}</Text>
-        </View>
-        <View style={styles.gridItem}>
-          <Text style={styles.gridLabel}>RSSI</Text>
-          <Text style={styles.gridVal}>{signal}</Text>
-        </View>
-      </View>
-      <View style={styles.deviceActions}>
-        <TouchableOpacity style={styles.miniBtn}><Text style={styles.miniBtnText}>DIAG</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.miniBtn}><Text style={styles.miniBtnText}>REBOOT</Text></TouchableOpacity>
-      </View>
-    </BlurView>
+    <View style={styles.telemetryItem}>
+      <Text style={styles.telemetryLabel}>{label}</Text>
+      <Text style={[styles.telemetryValue, { color: accent }]}>{String(value)}</Text>
+    </View>
   );
 }
-
-import { useMqttStore } from '../store/mqttStore';
-import { MQTT_TOPICS } from '../config';
-import { Alert } from 'react-native';
 
 export default function SystemSetting({ navigation }) {
   const { t } = useTranslation();
-  const langue = useLangueStore((state) => state.langue);
-  const modifierLangue = useLangueStore((state) => state.modifierLangue);
-  
-  const [broker, setBroker] = useState('172.16.9.115');
-  const [tls, setTls] = useState(true);
-  const [biometric, setBiometric] = useState(true);
-
   const isConnected = useMqttStore((state) => state.isConnected);
-  const client = useMqttStore((state) => state.client);
+  const telemetry = useMqttStore((state) => state.telemetry);
+  const updateSystemSettings = useMqttStore((state) => state.updateSystemSettings);
 
-  const handleUpdateConfig = () => {
+  const [autoLightEnabled, setAutoLightEnabled] = useState(true);
+  const [assistLightsOn, setAssistLightsOn] = useState(false);
+  const [greenLedOn, setGreenLedOn] = useState(false);
+  const [redLedOn, setRedLedOn] = useState(false);
+  const [darkRatio, setDarkRatio] = useState('1.25');
+  const [lcdLine1, setLcdLine1] = useState('BioGuard');
+  const [lcdLine2, setLcdLine2] = useState('');
+
+  useEffect(() => {
+    if (!telemetry) return;
+    setAutoLightEnabled(Boolean(telemetry.lighting?.auto_enabled));
+    setAssistLightsOn(Boolean(telemetry.lighting?.assist_lights_on));
+    setGreenLedOn(Boolean(telemetry.lighting?.green_led_on));
+    setRedLedOn(Boolean(telemetry.lighting?.red_led_on));
+    if (telemetry.light_sensor?.dark_ratio != null) {
+      setDarkRatio(String(telemetry.light_sensor.dark_ratio));
+    }
+    if (telemetry.lcd?.line1) {
+      setLcdLine1(telemetry.lcd.line1);
+    }
+    setLcdLine2(telemetry.lcd?.line2 || '');
+  }, [telemetry]);
+
+  const sendSettings = async (payload, successMessage = t('systemSettings.hardwareCommandSent')) => {
     if (!isConnected) {
-      Alert.alert("System Offline", "Unable to reach the security gateway.");
+      Alert.alert(t('systemSettings.systemOfflineTitle'), t('systemSettings.systemOfflineDesc'));
       return;
     }
 
-    const config = {
-      broker_host: broker,
-      tls_enabled: tls,
-      biometric_override: biometric,
-      timestamp: Date.now()
-    };
-
-    client.publish(MQTT_TOPICS.settingsCmd, JSON.stringify(config));
-    Alert.alert("Configuration transmise", "Les paramètres du système ont été envoyés au Raspberry Pi.");
+    try {
+      await updateSystemSettings(payload);
+      Alert.alert(t('common.success'), successMessage);
+    } catch (error) {
+      Alert.alert(t('common.error'), error?.message || t('systemSettings.systemOfflineDesc'));
+    }
   };
+
+  const applyLightingSettings = async () => {
+    await sendSettings({
+      auto_light_enabled: autoLightEnabled,
+      assist_lights_on: assistLightsOn,
+      green_led_on: greenLedOn,
+      red_led_on: redLedOn,
+      dark_ratio: Number.parseFloat(darkRatio) || 1.25,
+    });
+  };
+
+  const handleSendLcd = async () => {
+    await sendSettings(
+      {
+        lcd_line1: lcdLine1,
+        lcd_line2: lcdLine2,
+      },
+      t('systemSettings.lcdSend'),
+    );
+  };
+
+  const lightData = telemetry?.light_sensor;
+  const lightingData = telemetry?.lighting;
+  const lcdData = telemetry?.lcd;
+  const cameraData = telemetry?.camera;
 
   return (
     <View style={styles.screen}>
@@ -120,82 +125,131 @@ export default function SystemSetting({ navigation }) {
         <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>SYSTEM CORE</Text>
+        <Text style={styles.headerTitle}>{t('systemSettings.headerTitle')}</Text>
         <View style={styles.spacer} />
       </View>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.titleSection}>
-          <Text style={styles.pageTitle}>SETTINGS</Text>
-          <Text style={styles.pageSubtitle}>CORE INFRASTRUCTURE & SECURITY</Text>
+          <Text style={styles.pageTitle}>{t('systemSettings.hardwareTitle')}</Text>
+          <Text style={styles.pageSubtitle}>{t('systemSettings.hardwareSubtitle')}</Text>
         </View>
 
         <View style={styles.card}>
-          <SectionHeader icon="radio-outline" title="MQTT Broker" color={COLORS.neonCyan} />
-          <View style={styles.cardContent}>
-            <InputField label="HOST ADDRESS" value={broker} onChangeText={setBroker} />
-            <View style={styles.row}>
-              <InputField label="PORT" value="1883" onChangeText={() => {}} />
-              <View style={styles.toggleGroup}>
-                <Text style={styles.inputLabel}>TLS 1.3</Text>
-                <Switch value={tls} onValueChange={setTls} trackColor={{ true: COLORS.neonCyan }} />
-              </View>
+          <SectionHeader icon="pulse-outline" title={t('systemSettings.telemetryTitle')} color={COLORS.neonGreen} />
+          {telemetry ? (
+            <View style={styles.telemetryGrid}>
+              <TelemetryItem
+                label={t('systemSettings.lightValue')}
+                value={lightData?.value ?? '--'}
+                accent={lightData?.is_dark ? COLORS.neonAmber : COLORS.neonGreen}
+              />
+              <TelemetryItem label={t('systemSettings.lightBaseline')} value={lightData?.baseline ?? '--'} />
+              <TelemetryItem label={t('systemSettings.lightThreshold')} value={lightData?.dark_threshold ?? '--'} />
+              <TelemetryItem
+                label={t('systemSettings.lightSensorTitle')}
+                value={lightData?.is_dark ? t('systemSettings.lightDark') : t('systemSettings.lightBright')}
+                accent={lightData?.is_dark ? COLORS.neonAmber : COLORS.neonGreen}
+              />
+              <TelemetryItem
+                label={t('systemSettings.lightingState')}
+                value={lightingData?.assist_lights_on ? t('common.online') : t('common.offline')}
+                accent={lightingData?.assist_lights_on ? COLORS.neonGreen : COLORS.textDim}
+              />
+              <TelemetryItem
+                label={t('systemSettings.cameraTitle')}
+                value={cameraData?.available ? t('systemSettings.cameraAvailable') : t('common.offline')}
+                accent={cameraData?.available ? COLORS.neonGreen : COLORS.neonRed}
+              />
+              <TelemetryItem
+                label={t('systemSettings.cameraMockMode')}
+                value={cameraData?.mock_mode ? t('common.warning') : t('common.success')}
+                accent={cameraData?.mock_mode ? COLORS.neonAmber : COLORS.neonGreen}
+              />
+              <TelemetryItem label={t('systemSettings.greenLedState')} value={lightingData?.green_led_on ? 'ON' : 'OFF'} />
+              <TelemetryItem label={t('systemSettings.redLedState')} value={lightingData?.red_led_on ? 'ON' : 'OFF'} />
+              <TelemetryItem label={t('systemSettings.lcdLine1')} value={lcdData?.line1 || '--'} />
+              <TelemetryItem label={t('systemSettings.lcdLine2')} value={lcdData?.line2 || '--'} />
             </View>
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleUpdateConfig}>
-              <Text style={styles.primaryBtnText}>UPDATE CONFIGURATION</Text>
+          ) : (
+            <Text style={styles.emptyText}>{t('systemSettings.telemetryUnavailable')}</Text>
+          )}
+        </View>
+
+        <View style={styles.card}>
+          <SectionHeader icon="bulb-outline" title={t('systemSettings.lightSensorTitle')} color={COLORS.neonAmber} />
+          <View style={styles.cardContent}>
+            <ToggleRow
+              title={t('systemSettings.autoLightTitle')}
+              description={t('systemSettings.autoLightDesc')}
+              value={autoLightEnabled}
+              onValueChange={setAutoLightEnabled}
+              color={COLORS.neonAmber}
+            />
+            <ToggleRow
+              title={t('systemSettings.assistLightsTitle')}
+              description={t('systemSettings.assistLightsDesc')}
+              value={assistLightsOn}
+              onValueChange={setAssistLightsOn}
+              color={COLORS.neonAmber}
+            />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>{t('systemSettings.lightThreshold')}</Text>
+              <TextInput
+                style={styles.textInput}
+                value={darkRatio}
+                onChangeText={setDarkRatio}
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <TouchableOpacity style={styles.primaryBtn} onPress={applyLightingSettings}>
+              <Text style={styles.primaryBtnText}>{t('systemSettings.updateConfiguration')}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.card}>
-          <SectionHeader icon="hardware-chip-outline" title="Active Nodes" color={COLORS.neonAmber} />
+          <SectionHeader icon="color-filter-outline" title={t('systemSettings.securityTitle')} color={COLORS.neonCyan} />
           <View style={styles.cardContent}>
-            <DeviceCard name="BG-RPI-01" status="Online" firmware="v3.1.2" uptime="12d 4h" signal="-65dBm" />
-            <DeviceCard name="BG-NODE-02" status="Warning" firmware="v3.0.1" uptime="45m" signal="-82dBm" />
-            <TouchableOpacity style={styles.addBtn}>
-              <Ionicons name="add" size={20} color={COLORS.neonAmber} />
-              <Text style={styles.addBtnText}>PROVISION NEW NODE</Text>
+            <ToggleRow
+              title={t('systemSettings.greenLedTitle')}
+              description={t('systemSettings.greenLedDesc')}
+              value={greenLedOn}
+              onValueChange={setGreenLedOn}
+              color={COLORS.neonGreen}
+            />
+            <ToggleRow
+              title={t('systemSettings.redLedTitle')}
+              description={t('systemSettings.redLedDesc')}
+              value={redLedOn}
+              onValueChange={setRedLedOn}
+              color={COLORS.neonRed}
+            />
+            <TouchableOpacity
+              style={[styles.secondaryBtn, { borderColor: COLORS.neonCyan }]}
+              onPress={() => sendSettings({ buzzer_test: true }, t('systemSettings.buzzerButton'))}
+            >
+              <Ionicons name="volume-high-outline" size={18} color={COLORS.neonCyan} />
+              <Text style={[styles.secondaryBtnText, { color: COLORS.neonCyan }]}>{t('systemSettings.buzzerButton')}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.card}>
-          <SectionHeader icon="shield-checkmark-outline" title="Security" color={COLORS.neonGreen} />
+          <SectionHeader icon="tablet-portrait-outline" title={t('systemSettings.lcdTitle')} color={COLORS.white} />
           <View style={styles.cardContent}>
-            <View style={styles.settingRow}>
-              <View>
-                <Text style={styles.settingLabel}>BIOMETRIC OVERRIDE</Text>
-                <Text style={styles.settingDesc}>Allow admin access with system bio</Text>
-              </View>
-              <Switch value={biometric} onValueChange={setBiometric} trackColor={{ true: COLORS.neonGreen }} />
+            <Text style={styles.helperText}>{t('systemSettings.lcdDesc')}</Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>{t('systemSettings.lcdLine1')}</Text>
+              <TextInput style={styles.textInput} value={lcdLine1} onChangeText={setLcdLine1} maxLength={16} />
             </View>
-            <View style={styles.settingRow}>
-              <View>
-                <Text style={styles.settingLabel}>AUTO-REFRESH LOGS</Text>
-                <Text style={styles.settingDesc}>Real-time telemetry streaming</Text>
-              </View>
-              <Switch value={true} onValueChange={() => {}} trackColor={{ true: COLORS.neonGreen }} />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>{t('systemSettings.lcdLine2')}</Text>
+              <TextInput style={styles.textInput} value={lcdLine2} onChangeText={setLcdLine2} maxLength={16} />
             </View>
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <SectionHeader icon="globe-outline" title="Localization" color={COLORS.white} />
-          <View style={styles.cardContent}>
-            <View style={styles.langRow}>
-              <TouchableOpacity 
-                style={[styles.langBtn, langue === 'en' && styles.langBtnActive]}
-                onPress={() => modifierLangue('en')}
-              >
-                <Text style={[styles.langBtnText, langue === 'en' && styles.langBtnTextActive]}>ENGLISH</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.langBtn, langue === 'fr' && styles.langBtnActive]}
-                onPress={() => modifierLangue('fr')}
-              >
-                <Text style={[styles.langBtnText, langue === 'fr' && styles.langBtnTextActive]}>FRANÇAIS</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleSendLcd}>
+              <Text style={styles.primaryBtnText}>{t('systemSettings.lcdSend')}</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -218,68 +272,75 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
   headerTitle: { color: COLORS.white, fontSize: 16, fontWeight: '800', letterSpacing: 2 },
   spacer: { width: 40 },
-
   scroll: { flex: 1, paddingHorizontal: 20 },
   scrollContent: { paddingTop: 10 },
-
   titleSection: { marginBottom: 30 },
-  pageTitle: { color: COLORS.white, fontSize: 32, fontWeight: '900', letterSpacing: 2 },
-  pageSubtitle: { color: COLORS.textDim, fontSize: 10, fontWeight: '800', letterSpacing: 1, marginTop: 5 },
-
-  card: { marginBottom: 25 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 15 },
-  sectionTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 2 },
-  cardContent: { gap: 15 },
-
-  row: { flexDirection: 'row', gap: 15, alignItems: 'flex-end' },
-  inputGroup: { flex: 1 },
-  inputLabel: { color: COLORS.textDim, fontSize: 8, fontWeight: '900', letterSpacing: 1, marginBottom: 8 },
-  textInput: { 
-    height: 50, backgroundColor: 'rgba(255, 255, 255, 0.03)', 
-    borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)',
-    paddingHorizontal: 15, color: COLORS.white, fontSize: 14, fontWeight: '600',
+  pageTitle: { color: COLORS.white, fontSize: 30, fontWeight: '900', letterSpacing: 1 },
+  pageSubtitle: { color: COLORS.textDim, fontSize: 11, fontWeight: '700', lineHeight: 18, marginTop: 8 },
+  card: { marginBottom: 24 },
+  cardContent: { gap: 14 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  sectionTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
+  telemetryGrid: {
+    gap: 12,
   },
-  toggleGroup: { alignItems: 'center', paddingBottom: 5 },
-
-  primaryBtn: { 
-    height: 50, borderRadius: 12, backgroundColor: COLORS.neonCyan, 
-    alignItems: 'center', justifyContent: 'center', marginTop: 5,
-    shadowColor: COLORS.neonCyan, shadowOpacity: 0.3, shadowRadius: 10,
+  telemetryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.04)',
+    gap: 12,
+  },
+  telemetryLabel: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '700', flex: 1 },
+  telemetryValue: { fontSize: 12, fontWeight: '900', textAlign: 'right', flexShrink: 1 },
+  emptyText: { color: COLORS.textDim, fontSize: 13, lineHeight: 20 },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.04)',
+    gap: 12,
+  },
+  settingCopy: { flex: 1, minWidth: 0 },
+  settingLabel: { color: COLORS.white, fontSize: 14, fontWeight: '800' },
+  settingDesc: { color: COLORS.textDim, fontSize: 11, lineHeight: 16, marginTop: 4 },
+  inputGroup: { gap: 8 },
+  inputLabel: { color: COLORS.textDim, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  textInput: {
+    height: 50,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    color: COLORS.white,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  helperText: { color: COLORS.textSecondary, fontSize: 12, lineHeight: 18 },
+  primaryBtn: {
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: COLORS.neonCyan,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
   },
   primaryBtnText: { color: COLORS.bg, fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-
-  settingRow: { 
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: 'rgba(255, 255, 255, 0.03)',
+  secondaryBtn: {
+    minHeight: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
-  settingLabel: { color: COLORS.white, fontSize: 14, fontWeight: '800' },
-  settingDesc: { color: COLORS.textDim, fontSize: 10, marginTop: 4 },
-
-  deviceCard: { borderRadius: 20, padding: 15, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)', marginBottom: 10, overflow: 'hidden' },
-  deviceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  deviceInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  statusDot: { width: 8, height: 8, borderRadius: 4, shadowOpacity: 1, shadowRadius: 5 },
-  deviceName: { color: COLORS.white, fontSize: 14, fontWeight: '800' },
-  deviceTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: 'rgba(255, 255, 255, 0.03)' },
-  deviceTagText: { fontSize: 8, fontWeight: '900', letterSpacing: 1 },
-  deviceGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
-  gridItem: { alignItems: 'center' },
-  gridLabel: { color: COLORS.textDim, fontSize: 7, fontWeight: '800', marginBottom: 4 },
-  gridVal: { color: COLORS.white, fontSize: 10, fontWeight: '700' },
-  deviceActions: { flexDirection: 'row', gap: 10 },
-  miniBtn: { flex: 1, height: 35, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)', alignItems: 'center', justifyContent: 'center' },
-  miniBtnText: { color: COLORS.textDim, fontSize: 8, fontWeight: '900' },
-
-  addBtn: { 
-    height: 50, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', 
-    borderColor: COLORS.neonAmber, alignItems: 'center', justifyContent: 'center',
-    flexDirection: 'row', gap: 10,
-  },
-  addBtnText: { color: COLORS.neonAmber, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-
-  langRow: { flexDirection: 'row', gap: 15 },
-  langBtn: { flex: 1, height: 50, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)', alignItems: 'center', justifyContent: 'center' },
-  langBtnActive: { borderColor: COLORS.white, backgroundColor: 'rgba(255, 255, 255, 0.05)' },
-  langBtnText: { color: COLORS.textDim, fontSize: 11, fontWeight: '800' },
-  langBtnTextActive: { color: COLORS.white },
+  secondaryBtnText: { fontSize: 12, fontWeight: '900', letterSpacing: 1, textAlign: 'center' },
 });

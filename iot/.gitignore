@@ -11,6 +11,14 @@ venv/
 env/
 ENV/
 
+# Runtime artifacts
+veinguard.db
+firebase-service-account.json
+captures/
+*.jpg
+*.jpeg
+*.png
+
 # Dataset (large binary files – ne pas committer)
 data/
 

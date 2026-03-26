@@ -19,6 +19,7 @@ class LCDDisplay(Display):
         self.address = address
         self.port = port
         self._lcd = None
+        self.last_message = {"line1": "", "line2": ""}
 
         if not config.MOCK_MODE and CharLCD is not None:
             self._init_lcd()
@@ -48,6 +49,7 @@ class LCDDisplay(Display):
     def show_message(self, line1: str, line2: str = "") -> None:
         line1 = self._format(line1)
         line2 = self._format(line2)
+        self.last_message = {"line1": line1.strip(), "line2": line2.strip()}
         logger.info("[LCD] |%s| |%s|", line1, line2)
         if self._lcd is not None:
             self._write(line1, line2)
@@ -81,6 +83,7 @@ class LCDDisplay(Display):
         self.clear()
 
     def clear(self) -> None:
+        self.last_message = {"line1": "", "line2": ""}
         if self._lcd is not None:
             self._lcd.clear()
 
@@ -110,3 +113,10 @@ class LCDDisplay(Display):
             logger.warning("LCD write failed: %s", exc)
             self._init_lcd()
 
+    def snapshot(self) -> dict:
+        return {
+            "address": hex(self.address),
+            "line1": self.last_message["line1"],
+            "line2": self.last_message["line2"],
+            "enabled": self._lcd is not None or config.MOCK_MODE,
+        }

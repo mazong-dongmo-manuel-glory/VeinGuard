@@ -40,6 +40,12 @@ class StatusLED(Actuator):
         else:
             logger.info("[MOCK][%s] OFF", self.name)
 
+    def set_state(self, enabled: bool) -> None:
+        if enabled:
+            self.on()
+        else:
+            self.off()
+
     def blink(self, count: int = 3, period: float = 0.2) -> None:
         for _ in range(count):
             self.on()
@@ -47,7 +53,9 @@ class StatusLED(Actuator):
             self.off()
             time.sleep(period)
 
+    def snapshot(self) -> dict:
+        return {"pin": self.pin, "name": self.name, "is_on": self.state}
+
     def close(self) -> None:
         if self._device is not None:
             self._device.close()
-

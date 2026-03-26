@@ -10,6 +10,7 @@ import {
   StatusBar,
   Animated,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -57,9 +58,11 @@ import { MQTT_TOPICS } from '../config';
 
 export default function VeinScanBiometrics({ navigation }) {
   const { t } = useTranslation();
+  const { width } = useWindowDimensions();
   const [userId, setUserId] = useState('');
   const [scanning, setScanning] = useState(false);
   const scanLineAnim = useRef(new Animated.Value(0)).current;
+  const isCompact = width < 390;
 
   const isConnected = useMqttStore((state) => state.isConnected);
   const triggerScan = useMqttStore((state) => state.triggerScan);
@@ -79,17 +82,17 @@ export default function VeinScanBiometrics({ navigation }) {
 
   const handleScanToggle = () => {
     if (!isConnected) {
-        Alert.alert("Système hors ligne", "Impossible de joindre la passerelle Raspberry Pi.");
+        Alert.alert(t('veinScan.offlineTitle'), t('veinScan.offlineDesc'));
         return;
     }
 
     if (!scanning) {
         triggerScan(userId || 'demo-user').catch(() => {
           setScanning(false);
-          Alert.alert("Erreur", "Le scan biométrique n'a pas pu être lancé.");
+          Alert.alert(t('veinScan.scanErrorTitle'), t('veinScan.scanErrorDesc'));
         });
         setScanning(true);
-        Alert.alert("Scan lancé", "Place la paume et aligne bien les doigts sur le dispositif.");
+        Alert.alert(t('veinScan.scanStartedTitle'), t('veinScan.scanStartedDesc'));
     } else {
         setScanning(false);
     }
@@ -107,7 +110,7 @@ export default function VeinScanBiometrics({ navigation }) {
         <Text style={styles.headerTitle}>{t('veinScan.title')}</Text>
         <TouchableOpacity style={[styles.statusBadge, { backgroundColor: isConnected ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 61, 90, 0.1)' }]}>
           <View style={[styles.statusDot, { backgroundColor: isConnected ? COLORS.neonGreen : COLORS.neonRed }]} />
-          <Text style={[styles.statusText, { color: isConnected ? COLORS.neonGreen : COLORS.neonRed }]}>{isConnected ? 'ACTIVE' : 'OFFLINE'}</Text>
+          <Text style={[styles.statusText, { color: isConnected ? COLORS.neonGreen : COLORS.neonRed }]}>{isConnected ? t('veinScan.activeStatus') : t('common.offline')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -121,9 +124,9 @@ export default function VeinScanBiometrics({ navigation }) {
           <View style={styles.scannerHeader}>
             <View style={styles.recGroup}>
               <View style={[styles.recDot, !scanning && { backgroundColor: COLORS.textDim }]} />
-              <Text style={[styles.recText, !scanning && { color: COLORS.textDim }]}>{scanning ? 'LIVE FEED' : 'STANDBY'}</Text>
+              <Text style={[styles.recText, !scanning && { color: COLORS.textDim }]}>{scanning ? t('veinScan.liveFeed') : t('veinScan.standby')}</Text>
             </View>
-            <Text style={styles.scannerId}>SENSOR: BG-MULTI-01</Text>
+            <Text style={styles.scannerId}>{t('veinScan.sensorLabel')}: BG-MULTI-01</Text>
           </View>
 
           <View style={styles.scannerFrame}>
@@ -163,9 +166,9 @@ export default function VeinScanBiometrics({ navigation }) {
               <View style={styles.reticleV} />
             </View>
 
-            <View style={styles.frameFooter}>
-              <Text style={styles.frameMeta}>COORD: 42.0 // 18.5</Text>
-              <Text style={styles.frameMeta}>MQTT: {MQTT_TOPICS.scanCmd}</Text>
+            <View style={[styles.frameFooter, isCompact && styles.frameFooterCompact]}>
+              <Text numberOfLines={1} style={styles.frameMeta}>{t('veinScan.coordinates')}: 42.0 // 18.5</Text>
+              <Text numberOfLines={1} style={styles.frameMeta}>{t('veinScan.topicLabel')}: {MQTT_TOPICS.scanCmd}</Text>
             </View>
           </View>
 
@@ -200,7 +203,7 @@ export default function VeinScanBiometrics({ navigation }) {
         {/* Manual Access */}
         <BlurView intensity={10} style={styles.manualCard}>
           <Text style={styles.infoTitle}>{t('veinScan.manualIdEntry').toUpperCase()}</Text>
-          <View style={styles.inputRow}>
+          <View style={[styles.inputRow, isCompact && styles.inputRowCompact]}>
             <TextInput
               style={styles.manualInput}
               placeholder={t('veinScan.userIdPlaceholder')}
@@ -243,7 +246,7 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
   headerTitle: { color: COLORS.white, fontSize: 18, fontWeight: '800', letterSpacing: 1 },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(57, 255, 20, 0.1)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(57, 255, 20, 0.2)' },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(57, 255, 20, 0.1)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(57, 255, 20, 0.2)', marginLeft: 8 },
   statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
   statusText: { color: COLORS.neonGreen, fontSize: 10, fontWeight: '900' },
 
@@ -259,11 +262,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     overflow: 'hidden',
   },
-  scannerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  scannerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12 },
   recGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   recDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.neonRed },
   recText: { color: COLORS.neonRed, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  scannerId: { color: COLORS.textDim, fontSize: 9, fontWeight: '700' },
+  scannerId: { color: COLORS.textDim, fontSize: 9, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
 
   scannerFrame: {
     height: 240,
@@ -289,8 +292,9 @@ const styles = StyleSheet.create({
   reticleH: { width: '100%', height: 1, backgroundColor: 'rgba(255, 255, 255, 0.1)' },
   reticleV: { height: '100%', width: 1, backgroundColor: 'rgba(255, 255, 255, 0.1)' },
 
-  frameFooter: { position: 'absolute', bottom: 15, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20 },
-  frameMeta: { color: 'rgba(255, 255, 255, 0.2)', fontSize: 8, fontWeight: '700', letterSpacing: 1 },
+  frameFooter: { position: 'absolute', bottom: 15, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, gap: 12 },
+  frameFooterCompact: { flexDirection: 'column', alignItems: 'flex-start' },
+  frameMeta: { color: 'rgba(255, 255, 255, 0.2)', fontSize: 8, fontWeight: '700', letterSpacing: 1, flexShrink: 1 },
 
   scannerActions: { marginTop: 20 },
   scanBtn: { borderRadius: 18, overflow: 'hidden' },
@@ -309,12 +313,13 @@ const styles = StyleSheet.create({
 
   manualCard: { borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)', marginBottom: 20 },
   inputRow: { flexDirection: 'row', gap: 10 },
+  inputRowCompact: { flexDirection: 'column' },
   manualInput: { flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.08)', color: COLORS.white, paddingHorizontal: 15, paddingVertical: 12, fontSize: 14 },
   testBtn: { borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255, 216, 78, 0.2)' },
   testBtnInner: { paddingHorizontal: 15, justifyContent: 'center', flex: 1 },
   testBtnText: { color: COLORS.neonAmber, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
 
-  privacyCard: { flexDirection: 'row', backgroundColor: 'rgba(57, 255, 20, 0.03)', borderRadius: 20, padding: 15, gap: 15, borderWidth: 1, borderColor: 'rgba(57, 255, 20, 0.1)' },
+  privacyCard: { flexDirection: 'row', backgroundColor: 'rgba(57, 255, 20, 0.03)', borderRadius: 20, padding: 15, gap: 15, borderWidth: 1, borderColor: 'rgba(57, 255, 20, 0.1)', alignItems: 'flex-start' },
   privacyTextContent: { flex: 1 },
   privacyTitle: { color: COLORS.neonGreen, fontSize: 11, fontWeight: '900', letterSpacing: 1, marginBottom: 4 },
   privacyDesc: { color: COLORS.textDim, fontSize: 12, lineHeight: 18 },

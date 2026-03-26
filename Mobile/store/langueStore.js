@@ -2,14 +2,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import i18next from "i18next";
 
 const STORAGE_KEY = "langue-storage";
+const DEFAULT_LANGUAGE = "fr";
 
 let state = {
-  langue: "fr",
-  modifierLangue: (nouvelleLangue) => {
-    if (!nouvelleLangue) return;
-    state = { ...state, langue: nouvelleLangue };
-    i18next.changeLanguage(nouvelleLangue);
-    AsyncStorage.setItem(STORAGE_KEY, nouvelleLangue).catch(() => {});
+  langue: DEFAULT_LANGUAGE,
+  modifierLangue: () => {
+    state = { ...state, langue: DEFAULT_LANGUAGE };
+    i18next.changeLanguage(DEFAULT_LANGUAGE);
+    AsyncStorage.setItem(STORAGE_KEY, DEFAULT_LANGUAGE).catch(() => {});
     listeners.forEach((listener) => listener());
   },
 };
@@ -17,12 +17,11 @@ let state = {
 const listeners = new Set();
 
 AsyncStorage.getItem(STORAGE_KEY)
-  .then((savedLangue) => {
-    if (savedLangue) {
-      state = { ...state, langue: savedLangue };
-      i18next.changeLanguage(savedLangue);
-      listeners.forEach((listener) => listener());
-    }
+  .then(() => {
+    state = { ...state, langue: DEFAULT_LANGUAGE };
+    i18next.changeLanguage(DEFAULT_LANGUAGE);
+    AsyncStorage.setItem(STORAGE_KEY, DEFAULT_LANGUAGE).catch(() => {});
+    listeners.forEach((listener) => listener());
   })
   .catch(() => {});
 

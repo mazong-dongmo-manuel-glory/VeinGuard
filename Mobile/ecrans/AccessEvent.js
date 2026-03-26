@@ -89,7 +89,7 @@ export default function AccessEvent({ navigation, route }) {
         <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={COLORS.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>EVENT LOG</Text>
+        <Text style={styles.headerTitle}>{t('accessEvent.title')}</Text>
         <View style={styles.spacer} />
       </View>
 
@@ -102,43 +102,43 @@ export default function AccessEvent({ navigation, route }) {
         </View>
 
         <View style={styles.actionsRow}>
-          <ActionButton icon="refresh" title="RE-RUN" color={COLORS.neonCyan} />
-          <ActionButton icon="flag" title="FLAG" color={COLORS.neonRed} />
-          <ActionButton icon="copy" title="COPY" color={COLORS.neonPurple} />
+          <ActionButton icon="refresh" title={t('accessEvent.rerun')} color={COLORS.neonCyan} />
+          <ActionButton icon="flag" title={t('accessEvent.flag')} color={COLORS.neonRed} />
+          <ActionButton icon="copy" title={t('accessEvent.copy')} color={COLORS.neonPurple} />
         </View>
 
         <BlurView intensity={15} tint="dark" style={styles.card}>
-          <Text style={styles.cardTitle}>EVENT TIMELINE</Text>
+          <Text style={styles.cardTitle}>{t('accessEvent.timeline')}</Text>
           <View style={styles.timelineContainer}>
             <TimelineItem
               icon="play"
-              title="Scan Start"
-              desc="Biometric sensor activated, multimodal capture initiated"
-              meta="Duration: 280ms"
+              title={t('accessEvent.scanStart')}
+              desc={t('accessEvent.scanStartDesc')}
+              meta={t('accessEvent.duration')}
               time="14:23:42.341"
               dotColor={COLORS.neonCyan}
             />
             <TimelineItem
               icon="cloud-upload"
-              title="Publish"
-              desc="Biometric summary transmitted via MQTT to authentication gateway"
-              meta="Latency: 127ms"
+              title={t('accessEvent.publish')}
+              desc={t('accessEvent.publishDesc')}
+              meta={t('accessEvent.latency')}
               time="14:23:44.188"
               dotColor={COLORS.neonPurple}
             />
             <TimelineItem
               icon="git-commit"
-              title="Decision"
-              desc="AI pattern matching completed, confidence score calculated"
-              meta={`Processing: 768ms · Confidence: ${eventScore}`}
+              title={t('accessEvent.decision')}
+              desc={t('accessEvent.decisionDesc')}
+              meta={`${t('accessEvent.processing')}: 768 ms · ${t('accessDecision.confidence')}: ${eventScore}`}
               time="14:23:44.956"
               dotColor={statusColor}
             />
             <TimelineItem
               icon="power"
-              title="Relay Trigger"
-              desc="Access granted, door relay activated for 5 seconds"
-              meta="Response: 67ms · Status: SUCCESS"
+              title={t('accessEvent.relayTrigger')}
+              desc={t('accessEvent.relayTriggerDesc')}
+              meta={`${t('accessEvent.response')} · ${t('accessEvent.success')}`}
               time="14:23:45.021"
               dotColor={COLORS.neonGreen}
               isLast
@@ -147,22 +147,22 @@ export default function AccessEvent({ navigation, route }) {
         </BlurView>
 
         <BlurView intensity={10} style={styles.card}>
-          <Text style={styles.cardTitle}>RPI TELEMETRY</Text>
-          <TelemetryRow label="Device ID" value="BG-RPI-01" />
+          <Text style={styles.cardTitle}>{t('accessEvent.telemetry')}</Text>
+          <TelemetryRow label={t('accessEvent.deviceId')} value="BG-RPI-01" />
           <TelemetryRow label="RSSI" value="-42 dBm" valueColor={COLORS.neonGreen} />
-          <TelemetryRow label="Uptime" value="72h 14m" />
-          <TelemetryRow label="Internal Temp" value="34.2°C" valueColor={COLORS.neonAmber} />
+          <TelemetryRow label={t('dashboard.uptime')} value="72h 14m" />
+          <TelemetryRow label={t('accessEvent.internalTemp')} value="34.2°C" valueColor={COLORS.neonAmber} />
         </BlurView>
 
         <View style={styles.logSection}>
-          <Text style={styles.sectionTitle}>RAW PAYLOADS</Text>
+          <Text style={styles.sectionTitle}>{t('accessEvent.rawPayloads')}</Text>
           <CodeBlock
-            title="Scan Request"
+            title={t('accessEvent.scanRequest')}
             topic="bioguard/cmd/access/scan"
             payload={`{\n  "eventId": "${eventId}",\n  "deviceId": "BG-RPI-01",\n  "timestamp": "2024-01-15T14:23:42.341Z",\n  "userId": "${userSlug}",\n  "sensorData": {\n    "quality": 0.94,\n    "modalities": ["palmprint", "finger_geometry"]\n  }\n}`}
           />
           <CodeBlock
-            title="Auth Response"
+            title={t('accessEvent.authResponse')}
             topic="bioguard/res/access/scan/mobile-demo"
             payload={`{\n  "eventId": "${eventId}",\n  "result": "${eventStatus}",\n  "confidence": ${eventScore === '--' ? 'null' : (Number(eventScore.replace('%', '')) / 100).toFixed(3)},\n  "userId": "${userSlug}",\n  "timestamp": "2024-01-15T14:23:44.956Z",\n  "doorAction": "UNLOCK_5S"\n}`}
           />
@@ -191,14 +191,14 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: 20 },
   scrollContent: { paddingTop: 10 },
 
-  titleSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
-  pageTitle: { color: COLORS.white, fontSize: 32, fontWeight: '900', letterSpacing: 1 },
+  titleSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25, gap: 12 },
+  pageTitle: { color: COLORS.white, fontSize: 32, fontWeight: '900', letterSpacing: 1, flexShrink: 1 },
   statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   statusText: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
 
-  actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 25 },
-  actionBtn: { flex: 1, borderRadius: 15, borderWidth: 1, paddingVertical: 15, alignItems: 'center', shadowOpacity: 0.1, shadowRadius: 10 },
-  actionBtnText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 25, flexWrap: 'wrap' },
+  actionBtn: { flex: 1, minWidth: 96, borderRadius: 15, borderWidth: 1, paddingVertical: 15, paddingHorizontal: 10, alignItems: 'center', shadowOpacity: 0.1, shadowRadius: 10 },
+  actionBtnText: { fontSize: 10, fontWeight: '900', letterSpacing: 1, textAlign: 'center', lineHeight: 14 },
 
   card: { borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)', marginBottom: 20, overflow: 'hidden' },
   cardTitle: { color: COLORS.textDim, fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 20 },
@@ -209,15 +209,15 @@ const styles = StyleSheet.create({
   timelineDot: { width: 10, height: 10, borderRadius: 5, zIndex: 1, shadowOpacity: 0.8, shadowRadius: 4 },
   timelineLine: { width: 2, flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)', marginVertical: 2 },
   timelineContent: { flex: 1, paddingBottom: 25 },
-  timelineHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
-  timelineTitle: { color: COLORS.white, fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
+  timelineHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 5, gap: 8 },
+  timelineTitle: { color: COLORS.white, fontSize: 13, fontWeight: '800', letterSpacing: 0.5, flex: 1, minWidth: 0 },
   timelineTime: { color: COLORS.textDim, fontSize: 10, fontWeight: '600' },
   timelineDesc: { color: COLORS.textSecondary, fontSize: 12, lineHeight: 18, marginBottom: 5 },
   timelineMeta: { fontSize: 10, fontWeight: '700' },
 
-  telemetryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255, 255, 255, 0.03)' },
+  telemetryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255, 255, 255, 0.03)', gap: 12 },
   telemetryLabel: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '700' },
-  telemetryValue: { fontSize: 13, fontWeight: '800' },
+  telemetryValue: { fontSize: 13, fontWeight: '800', textAlign: 'right', flexShrink: 1 },
 
   logSection: { gap: 12 },
   sectionTitle: { color: COLORS.textDim, fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 15 },
@@ -225,5 +225,5 @@ const styles = StyleSheet.create({
   codeTitle: { color: COLORS.neonCyan, fontSize: 11, fontWeight: '900', letterSpacing: 1, marginBottom: 5 },
   codeTopic: { color: COLORS.textDim, fontSize: 10, marginBottom: 10 },
   codeBox: { backgroundColor: 'rgba(0, 0, 0, 0.3)', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)' },
-  codeText: { color: '#8899aa', fontSize: 11, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', lineHeight: 16 },
+  codeText: { color: '#8899aa', fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', lineHeight: 16 },
 });

@@ -21,32 +21,35 @@ import { logoutFromFirebase } from '../services/auth';
 const devices = [
   {
     id: 'BG-RPI-01',
-    role: 'PRIMARY ACCESS HUB',
+    roleKey: 'dashboard.primaryAccessHub',
     status: 'ONLINE',
     statusColor: COLORS.neonGreen,
-    heartbeat: '2s ago',
+    heartbeatType: 'seconds',
+    heartbeatValue: 2,
     rssi: '-42 dBm',
     battery: '87%',
     firmware: 'v2.4.1',
   },
   {
     id: 'BG-NODE-02',
-    role: 'SECONDARY SENSOR NODE',
+    roleKey: 'dashboard.secondarySensorNode',
     status: 'OFFLINE',
     statusColor: COLORS.neonRed,
-    heartbeat: '5m ago',
+    heartbeatType: 'minutes',
+    heartbeatValue: 5,
     rssi: '-',
     battery: '12%',
     firmware: 'v2.3.8',
   },
   {
     id: 'BG-NODE-03',
-    role: 'ACCESS CONTROL',
+    roleKey: 'dashboard.accessControl',
     status: 'ONLINE',
     statusColor: COLORS.neonGreen,
-    heartbeat: '1s ago',
+    heartbeatType: 'seconds',
+    heartbeatValue: 1,
     rssi: '-38 dBm',
-    battery: 'AC Mains',
+    battery: 'ac_mains',
     firmware: 'v2.4.1',
   },
 ];
@@ -71,15 +74,21 @@ function PulsingDot({ color }) {
 function DeviceCard({ device }) {
   const { t } = useTranslation();
   const isOnline = device.status === 'ONLINE';
+  const heartbeat =
+    device.heartbeatType === 'minutes'
+      ? t('dashboard.minutesAgo', { count: device.heartbeatValue })
+      : t('dashboard.secondsAgo', { count: device.heartbeatValue });
+  const batteryLabel = device.battery === 'ac_mains' ? t('dashboard.acMains') : device.battery;
+  const displayStatus = isOnline ? t('dashboard.onlineStatus') : t('dashboard.offlineStatus');
   
   return (
     <BlurView intensity={15} tint="dark" style={[styles.deviceCard, { borderColor: isOnline ? 'rgba(0, 242, 255, 0.2)' : 'rgba(255, 61, 90, 0.2)' }]}>
       <View style={styles.deviceHeader}>
         <View style={styles.deviceHeaderMain}>
-          <Text style={[styles.deviceId, { color: isOnline ? COLORS.neonCyan : COLORS.neonRed }]}>
+          <Text numberOfLines={1} style={[styles.deviceId, { color: isOnline ? COLORS.neonCyan : COLORS.neonRed }]}>
             {device.id}
           </Text>
-          <Text style={styles.deviceRole}>{device.role}</Text>
+          <Text numberOfLines={2} style={styles.deviceRole}>{t(device.roleKey)}</Text>
         </View>
         <PulsingDot color={isOnline ? COLORS.neonGreen : COLORS.neonRed} />
       </View>
@@ -87,7 +96,7 @@ function DeviceCard({ device }) {
       <View style={styles.deviceStats}>
         <View style={styles.statLine}>
           <Text style={styles.statLabel}>{t('dashboard.status')}</Text>
-          <Text style={[styles.statValue, { color: device.statusColor }]}>{device.status}</Text>
+          <Text style={[styles.statValue, { color: device.statusColor }]}>{displayStatus}</Text>
         </View>
         <View style={styles.statGrid}>
           <View style={styles.statBox}>
@@ -97,12 +106,12 @@ function DeviceCard({ device }) {
           </View>
           <View style={styles.statBox}>
             <Ionicons name="battery-dead" size={14} color={COLORS.textSecondary} />
-            <Text style={styles.statBoxVal}>{device.battery}</Text>
+            <Text style={styles.statBoxVal}>{batteryLabel}</Text>
             <Text style={styles.statBoxLabel}>{t('dashboard.battery')}</Text>
           </View>
           <View style={styles.statBox}>
             <Ionicons name="pulse" size={14} color={COLORS.textSecondary} />
-            <Text style={styles.statBoxVal}>{device.heartbeat}</Text>
+            <Text style={styles.statBoxVal}>{heartbeat}</Text>
             <Text style={styles.statBoxLabel}>{t('dashboard.heartbeat')}</Text>
           </View>
         </View>
@@ -117,9 +126,16 @@ export default function Dashboard({ navigation }) {
   const { t } = useTranslation();
   const { width } = useWindowDimensions();
   const [time, setTime] = useState(new Date());
+  const isCompact = width < 390;
   
   const systemStatus = useMqttStore((state) => state.status);
   const isConnected = useMqttStore((state) => state.isConnected);
+  const systemStatusLabel =
+    systemStatus === 'ONLINE'
+      ? t('dashboard.onlineStatus')
+      : systemStatus === 'OFFLINE'
+        ? t('dashboard.offlineStatus')
+        : systemStatus;
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -177,23 +193,23 @@ export default function Dashboard({ navigation }) {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Welcome Section */}
         <View style={styles.welcome}>
-          <View>
+          <View style={styles.welcomeTextBlock}>
             <Text style={styles.greeting}>{t('dashboard.title')}</Text>
             <Text style={styles.subtitle}>{t('dashboard.subtitle')}</Text>
           </View>
           <View style={[styles.systemBadge, { backgroundColor: isConnected ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 61, 90, 0.1)', borderColor: isConnected ? 'rgba(57, 255, 20, 0.3)' : 'rgba(255, 61, 90, 0.3)' }]}>
-            <Text style={[styles.systemBadgeText, { color: isConnected ? COLORS.neonGreen : COLORS.neonRed }]}>{systemStatus.toUpperCase()}</Text>
+            <Text style={[styles.systemBadgeText, { color: isConnected ? COLORS.neonGreen : COLORS.neonRed }]}>{systemStatusLabel}</Text>
           </View>
         </View>
 
         {/* Security Alert Banner */}
         <View style={[styles.alertBanner, { borderColor: isConnected ? 'rgba(57, 255, 20, 0.1)' : 'rgba(255, 61, 90, 0.1)' }]}>
           <Ionicons name={isConnected ? "shield-checkmark" : "warning"} size={20} color={isConnected ? COLORS.neonGreen : COLORS.neonRed} />
-          <Text style={styles.alertText}>{isConnected ? "System Secure. All protocols active." : "Gateway Offline. Limited functionality."}</Text>
+          <Text style={styles.alertText}>{isConnected ? t('dashboard.alertSecure') : t('dashboard.alertOffline')}</Text>
         </View>
 
         {/* Main Actions - Grid */}
-        <View style={styles.actionGrid}>
+        <View style={[styles.actionGrid, isCompact && styles.actionGridCompact]}>
           <TouchableOpacity 
             style={styles.mainAction} 
             onPress={() => navigation?.navigate('VeinScan')}
@@ -208,13 +224,13 @@ export default function Dashboard({ navigation }) {
             <TouchableOpacity style={styles.sideAction} onPress={() => navigation?.navigate('AccessHistory')}>
               <BlurView intensity={10} style={styles.sideActionInner}>
                 <Ionicons name="time" size={20} color={COLORS.neonCyan} />
-                <Text style={styles.sideActionLabel}>{t('dashboard.viewHistory')}</Text>
+                <Text numberOfLines={2} style={styles.sideActionLabel}>{t('dashboard.viewHistory')}</Text>
               </BlurView>
             </TouchableOpacity>
             <TouchableOpacity style={styles.sideAction} onPress={() => navigation?.navigate('UserManagement')}>
               <BlurView intensity={10} style={styles.sideActionInner}>
                 <Ionicons name="people" size={20} color={COLORS.neonAmber} />
-                <Text style={styles.sideActionLabel}>{t('dashboard.manageUsers')}</Text>
+                <Text numberOfLines={2} style={styles.sideActionLabel}>{t('dashboard.manageUsers')}</Text>
               </BlurView>
             </TouchableOpacity>
           </View>
@@ -222,8 +238,8 @@ export default function Dashboard({ navigation }) {
 
         {/* Device Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>ACTIVE NODES</Text>
-          <Text style={styles.nodeCount}>3 ONLINE</Text>
+          <Text style={styles.sectionTitle}>{t('dashboard.activeNodes')}</Text>
+          <Text style={styles.nodeCount}>{t('dashboard.nodeCount', { count: devices.filter((device) => device.status === 'ONLINE').length })}</Text>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.deviceScroll}>
@@ -236,23 +252,23 @@ export default function Dashboard({ navigation }) {
         <BlurView intensity={15} tint="dark" style={styles.brokerCard}>
           <View style={styles.brokerHeader}>
             <Ionicons name="radio" size={18} color={COLORS.neonCyan} />
-            <Text style={styles.brokerTitle}>MQTT CLUSTER STATUS</Text>
-            <Text style={styles.brokerStatus}>99.9% UPTIME</Text>
+            <Text style={styles.brokerTitle}>{t('dashboard.brokerTitle')}</Text>
+            <Text style={styles.brokerStatus}>99,9 % {t('dashboard.uptime')}</Text>
           </View>
           <View style={styles.brokerStats}>
             <View style={styles.brokerStat}>
               <Text style={styles.statNum}>47</Text>
-              <Text style={styles.statSubtitle}>MSG/S</Text>
+              <Text style={styles.statSubtitle}>{t('dashboard.messagesPerSecond')}</Text>
             </View>
             <View style={styles.vLine} />
             <View style={styles.brokerStat}>
               <Text style={styles.statNum}>12</Text>
-              <Text style={styles.statSubtitle}>TOPICS</Text>
+              <Text style={styles.statSubtitle}>{t('dashboard.topics')}</Text>
             </View>
             <View style={styles.vLine} />
             <View style={styles.brokerStat}>
               <Text style={styles.statNum}>0</Text>
-              <Text style={styles.statSubtitle}>DROPPED</Text>
+              <Text style={styles.statSubtitle}>{t('dashboard.dropped')}</Text>
             </View>
           </View>
         </BlurView>
@@ -293,9 +309,10 @@ const styles = StyleSheet.create({
   },
 
   scroll: { padding: 20 },
-  welcome: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 25 },
+  welcome: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 25, gap: 12 },
+  welcomeTextBlock: { flex: 1, minWidth: 0 },
   greeting: { color: COLORS.white, fontSize: 28, fontWeight: '900', letterSpacing: -0.5 },
-  subtitle: { color: COLORS.textSecondary, fontSize: 14, marginTop: 4 },
+  subtitle: { color: COLORS.textSecondary, fontSize: 14, marginTop: 4, lineHeight: 20 },
   systemBadge: {
     backgroundColor: 'rgba(57, 255, 20, 0.1)',
     paddingHorizontal: 12,
@@ -303,6 +320,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(57, 255, 20, 0.3)',
+    alignSelf: 'flex-start',
+    flexShrink: 1,
   },
   systemBadgeText: { color: COLORS.neonGreen, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
 
@@ -317,20 +336,21 @@ const styles = StyleSheet.create({
     marginBottom: 25,
     gap: 12,
   },
-  alertText: { color: COLORS.textSecondary, fontSize: 13, fontWeight: '500' },
+  alertText: { color: COLORS.textSecondary, fontSize: 13, fontWeight: '500', flex: 1, lineHeight: 18 },
 
   actionGrid: { flexDirection: 'row', gap: 15, marginBottom: 30 },
+  actionGridCompact: { flexDirection: 'column' },
   mainAction: { flex: 1.2, height: 140, borderRadius: 24, overflow: 'hidden' },
   actionInner: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  actionLabel: { marginTop: 12, fontSize: 13, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
+  actionLabel: { marginTop: 12, fontSize: 13, fontWeight: '900', textAlign: 'center', letterSpacing: 1, lineHeight: 18 },
   sideActions: { flex: 1, gap: 15 },
   sideAction: { flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)' },
-  sideActionInner: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
-  sideActionLabel: { color: COLORS.white, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  sideActionInner: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 16 },
+  sideActionLabel: { color: COLORS.white, fontSize: 11, fontWeight: '700', letterSpacing: 0.5, textAlign: 'center', lineHeight: 15 },
 
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 15 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 15, gap: 12 },
   sectionTitle: { color: COLORS.textDim, fontSize: 12, fontWeight: '800', letterSpacing: 2 },
-  nodeCount: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '700' },
+  nodeCount: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '700', textAlign: 'right' },
 
   deviceScroll: { paddingRight: 20, gap: 15 },
   deviceCard: {
@@ -341,16 +361,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   deviceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  deviceHeaderMain: { flex: 1, minWidth: 0, paddingRight: 12 },
   deviceId: { fontSize: 18, fontWeight: '900', letterSpacing: 1 },
-  deviceRole: { color: COLORS.textSecondary, fontSize: 10, marginTop: 4, letterSpacing: 1 },
+  deviceRole: { color: COLORS.textSecondary, fontSize: 10, marginTop: 4, letterSpacing: 1, lineHeight: 14 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   
   statLine: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
   statLabel: { color: COLORS.textSecondary, fontSize: 12 },
   statValue: { fontSize: 12, fontWeight: '700' },
   statGrid: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: 12, padding: 12 },
-  statBox: { alignItems: 'center', gap: 4 },
-  statBoxVal: { color: COLORS.white, fontSize: 11, fontWeight: '700' },
+  statBox: { alignItems: 'center', gap: 4, flex: 1, minWidth: 0 },
+  statBoxVal: { color: COLORS.white, fontSize: 11, fontWeight: '700', textAlign: 'center' },
   statBoxLabel: { color: COLORS.textDim, fontSize: 8, fontWeight: '600' },
 
   brokerCard: {
@@ -360,8 +381,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
   },
-  brokerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 10 },
-  brokerTitle: { flex: 1, color: COLORS.white, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  brokerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 10, flexWrap: 'wrap' },
+  brokerTitle: { flex: 1, minWidth: 140, color: COLORS.white, fontSize: 12, fontWeight: '800', letterSpacing: 1, lineHeight: 16 },
   brokerStatus: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '700' },
   brokerStats: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
   brokerStat: { alignItems: 'center' },

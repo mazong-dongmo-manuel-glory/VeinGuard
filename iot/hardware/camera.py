@@ -20,6 +20,7 @@ except ImportError:
 class AccessCamera(Camera):
     def __init__(self):
         self._camera = None
+        self.available = False
         if Picamera2 is not None and not config.MOCK_MODE:
             try:
                 self._camera = Picamera2()
@@ -28,6 +29,7 @@ class AccessCamera(Camera):
                 )
                 self._camera.configure(preview)
                 self._camera.start()
+                self.available = True
             except Exception as exc:
                 logger.warning("Camera unavailable, fallback to mock frame: %s", exc)
                 self._camera = None
@@ -52,6 +54,14 @@ class AccessCamera(Camera):
         if self._camera is not None:
             self._camera.close()
 
+    def snapshot(self) -> dict:
+        return {
+            "available": self.available or config.MOCK_MODE,
+            "mock_mode": config.MOCK_MODE or not self.available,
+            "width": config.CAMERA_WIDTH,
+            "height": config.CAMERA_HEIGHT,
+        }
+
     def _mock_frame(self):
         frame = np.full((config.CAMERA_HEIGHT, config.CAMERA_WIDTH, 3), 235, dtype=np.uint8)
         cv2.rectangle(frame, (170, 80), (470, 420), (190, 170, 150), -1)
@@ -61,4 +71,3 @@ class AccessCamera(Camera):
         cv2.circle(frame, (450, 130), 30, (160, 140, 120), -1)
         cv2.putText(frame, "MOCK PALM", (210, 455), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (60, 80, 90), 2)
         return frame
-

@@ -231,9 +231,24 @@ class BioGuardMQTTGateway:
         self.client.publish(response_topic, json.dumps(database.list_audit_logs()))
 
     def handle_settings_update_command(self, data: dict) -> None:
-        for key, value in data.items():
+        client_id = data.get("client_id", "anonymous")
+        response_topic = config.response_topic("settings/update", client_id)
+        applied = self.controller.apply_remote_settings(data)
+
+        for key, value in applied.items():
             database.update_device_state(key, value)
+
         database.log_audit("INFO", "SETTINGS_UPDATED", "Configuration mobile synchronisee", json.dumps(data))
+        self.client.publish(
+            response_topic,
+            json.dumps(
+                {
+                    "status": "success",
+                    "settings": {k: v for k, v in applied.items() if k != "telemetry"},
+                    "telemetry": applied["telemetry"],
+                }
+            ),
+        )
         self.publish_status("SETTINGS_UPDATED")
 
     def publish_status(self, status: str) -> None:

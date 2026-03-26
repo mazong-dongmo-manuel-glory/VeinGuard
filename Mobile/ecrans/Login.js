@@ -19,7 +19,7 @@ import { BlurView } from 'expo-blur';
 import { useMqttStore } from '../store/mqttStore';
 import { COLORS, GRADIENTS, SHADOWS } from '../theme';
 import { FIREBASE_ENABLED } from '../services/firebase';
-import { loginWithEmailPassword } from '../services/auth';
+import { getFirebaseAuthErrorMessage, loginWithEmailPassword } from '../services/auth';
 
 export default function Login({ navigation }) {
   const { t } = useTranslation();
@@ -50,7 +50,7 @@ export default function Login({ navigation }) {
 
       Alert.alert("Erreur", "Firebase Authentication n'est pas disponible.");
     } catch (error) {
-      Alert.alert("Échec de connexion", error?.message || "Identifiants incorrects");
+      Alert.alert("Échec de connexion", getFirebaseAuthErrorMessage(error));
       console.error(error);
     }
   };
@@ -176,7 +176,7 @@ export default function Login({ navigation }) {
             </View>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>SECURE ACCESS PROTOCOL v2.4</Text>
+              <Text style={styles.footerText}>{t('login.footer')}</Text>
               <View style={styles.footerOrbs}>
                 <View style={[styles.miniOrb, { backgroundColor: COLORS.neonCyan }]} />
                 <View style={[styles.miniOrb, { backgroundColor: COLORS.neonPurple }]} />

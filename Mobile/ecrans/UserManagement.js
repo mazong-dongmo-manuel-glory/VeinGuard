@@ -18,6 +18,22 @@ import { COLORS, GRADIENTS } from '../theme';
 import { useMqttStore } from '../store/mqttStore';
 import { useEffect } from 'react';
 
+function RoleBadge({ role, color }) {
+  return (
+    <View style={[styles.badge, { borderColor: `${color}55`, backgroundColor: `${color}12` }]}>
+      <Text style={[styles.badgeText, { color }]}>{role}</Text>
+    </View>
+  );
+}
+
+function StatusBadge({ status, color }) {
+  return (
+    <View style={[styles.badge, { borderColor: `${color}55`, backgroundColor: `${color}12` }]}>
+      <Text style={[styles.badgeText, { color }]}>{status}</Text>
+    </View>
+  );
+}
+
 function UserCard({ user }) {
   const { t } = useTranslation();
   
@@ -34,11 +50,11 @@ function UserCard({ user }) {
           </LinearGradient>
         </View>
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{user.username}</Text>
-          <Text style={styles.userEmail}>{user.role.toUpperCase()}</Text>
+          <Text numberOfLines={1} style={styles.userName}>{user.username}</Text>
+          <Text numberOfLines={1} style={styles.userEmail}>{user.role.toUpperCase()}</Text>
           <View style={styles.badgeRow}>
             <RoleBadge role={user.role.toUpperCase()} color={roleColor} />
-            <StatusBadge status="ACTIVE" color={statusColor} />
+            <StatusBadge status={t('userManagement.activeStatus')} color={statusColor} />
           </View>
         </View>
         <TouchableOpacity style={styles.moreBtn}>
@@ -52,7 +68,7 @@ function UserCard({ user }) {
           <Text style={styles.detailValue}>{new Date(user.created_at).toLocaleDateString()}</Text>
         </View>
         <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>ID</Text>
+          <Text style={styles.detailLabel}>{t('userManagement.idLabel')}</Text>
           <Text style={[styles.detailValue, { color: COLORS.neonCyan }]}>#00{user.id}</Text>
         </View>
       </View>
@@ -132,13 +148,13 @@ export default function UserManagement({ navigation }) {
 
         {/* User list */}
         <View style={styles.listHeader}>
-          <Text style={styles.listTitle}>OPERATIVES STREAM</Text>
-          <Text style={styles.listCount}>{filteredUsers.length} ONLINE</Text>
+          <Text style={styles.listTitle}>{t('userManagement.activeStream')}</Text>
+          <Text style={styles.listCount}>{t('userManagement.onlineCount', { count: filteredUsers.length })}</Text>
         </View>
 
         {filteredUsers.length === 0 && !isConnected && (
             <Text style={{ color: COLORS.textDim, textAlign: 'center', marginTop: 20 }}>
-                PROTOCOL ERROR: GATEWAY DISCONNECTED
+                {t('userManagement.gatewayDisconnected')}
             </Text>
         )}
 
@@ -202,9 +218,9 @@ const styles = StyleSheet.create({
   },
   filterChipText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' },
 
-  listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 15 },
+  listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 15, gap: 12 },
   listTitle: { color: COLORS.textDim, fontSize: 11, fontWeight: '800', letterSpacing: 2 },
-  listCount: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '700' },
+  listCount: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '700', textAlign: 'right' },
 
   userCard: {
     borderRadius: 24,
@@ -214,27 +230,28 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     overflow: 'hidden',
   },
-  userCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  userCardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 20 },
   userAvatar: { width: 50, height: 50, borderRadius: 25, overflow: 'hidden', marginRight: 15 },
   avatarInner: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  userInfo: { flex: 1 },
+  userInfo: { flex: 1, minWidth: 0 },
   userName: { color: COLORS.white, fontSize: 17, fontWeight: '800' },
   userEmail: { color: COLORS.textDim, fontSize: 13, marginTop: 2, marginBottom: 8 },
-  badgeRow: { flexDirection: 'row' },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
   badgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
-  moreBtn: { padding: 5 },
+  moreBtn: { padding: 5, marginLeft: 8 },
 
   userDetails: {
     flexDirection: 'row',
+    gap: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderRadius: 16,
     padding: 15,
     marginBottom: 20,
   },
-  detailItem: { flex: 1 },
+  detailItem: { flex: 1, minWidth: 0 },
   detailLabel: { color: COLORS.textDim, fontSize: 9, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
-  detailValue: { color: COLORS.white, fontSize: 12, fontWeight: '700' },
+  detailValue: { color: COLORS.white, fontSize: 12, fontWeight: '700', flexShrink: 1 },
 
   cardActions: { flexDirection: 'row', gap: 10 },
   actionBtn: {

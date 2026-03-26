@@ -54,16 +54,20 @@ def response_topic(command: str, client_id: str) -> str:
 PIN_LED_GREEN = int(os.getenv("VG_PIN_LED_GREEN", "16"))
 PIN_LED_RED = int(os.getenv("VG_PIN_LED_RED", "22"))
 PIN_BUZZER = int(os.getenv("VG_PIN_BUZZER", "23"))
-PIN_TOUCH = int(os.getenv("VG_PIN_TOUCH", "4"))
-PIN_DISTANCE_TRIGGER = int(os.getenv("VG_PIN_DISTANCE_TRIGGER", "24"))
-PIN_DISTANCE_ECHO = int(os.getenv("VG_PIN_DISTANCE_ECHO", "25"))
-PIN_MOTION = int(os.getenv("VG_PIN_MOTION", "18"))
+PIN_LIGHT_SENSOR = int(os.getenv("VG_PIN_LIGHT_SENSOR", "4"))
+PIN_LIGHT_LED_1 = int(os.getenv("VG_PIN_LIGHT_LED_1", "17"))
+PIN_LIGHT_LED_2 = int(os.getenv("VG_PIN_LIGHT_LED_2", "27"))
 
 # LCD
 LCD_I2C_ADDRESS = int(os.getenv("VG_LCD_I2C_ADDRESS", "0x27"), 16)
 LCD_PORT = int(os.getenv("VG_LCD_PORT", "1"))
 LCD_COLS = int(os.getenv("VG_LCD_COLS", "16"))
 LCD_ROWS = int(os.getenv("VG_LCD_ROWS", "2"))
+
+# Lighting automation
+LIGHT_SENSOR_TIMEOUT = float(os.getenv("VG_LIGHT_SENSOR_TIMEOUT", "0.5"))
+LIGHT_SENSOR_SAMPLES = int(os.getenv("VG_LIGHT_SENSOR_SAMPLES", "5"))
+LIGHT_SENSOR_DARK_RATIO = float(os.getenv("VG_LIGHT_SENSOR_DARK_RATIO", "1.25"))
 
 # Biometrics
 MATCH_THRESHOLD = float(os.getenv("VG_MATCH_THRESHOLD", "0.33"))
@@ -82,4 +86,3 @@ FIREBASE_USERS_COLLECTION = os.getenv("VG_FIREBASE_USERS_COLLECTION", "users")
 FIREBASE_BIOMETRICS_COLLECTION = os.getenv("VG_FIREBASE_BIOMETRICS_COLLECTION", "biometric_profiles")
 FIREBASE_EVENTS_COLLECTION = os.getenv("VG_FIREBASE_EVENTS_COLLECTION", "access_events")
 FIREBASE_TELEMETRY_COLLECTION = os.getenv("VG_FIREBASE_TELEMETRY_COLLECTION", "device_telemetry")
-

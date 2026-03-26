@@ -17,12 +17,12 @@ import { COLORS, GRADIENTS } from '../theme';
 
 const { width } = Dimensions.get('window');
 
-const Header = ({ navigation }) => (
+const Header = ({ navigation, t }) => (
   <View style={styles.header}>
     <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.backBtn}>
       <Ionicons name="chevron-back" size={24} color={COLORS.white} />
     </TouchableOpacity>
-    <Text style={styles.headerTitle}>AUTHENTICATION</Text>
+    <Text style={styles.headerTitle}>{t('accessDecision.headerTitle')}</Text>
     <View style={styles.spacer} />
   </View>
 );
@@ -38,28 +38,28 @@ const UserHologram = ({ t }) => (
         </View>
       </View>
       <View style={styles.userInfo}>
-        <Text style={styles.userName}>JOHN MITCHELL</Text>
-        <Text style={styles.userRole}>CHIEF ENGINEER · LEVEL 3</Text>
+        <Text numberOfLines={1} style={styles.userName}>{t('accessDecision.userNameValue')}</Text>
+        <Text numberOfLines={2} style={styles.userRole}>{t('accessDecision.userRoleValue')}</Text>
       </View>
       <View style={styles.cardDivider} />
       <View style={styles.cardGrid}>
         <View style={styles.cardCell}>
-          <Text style={styles.cardLabel}>ID</Text>
+          <Text style={styles.cardLabel}>{t('userManagement.idLabel')}</Text>
           <Text style={styles.cardValue}>USR-2847</Text>
         </View>
         <View style={styles.cardCell}>
-          <Text style={styles.cardLabel}>DEPT</Text>
-          <Text style={styles.cardValue}>CORE OPS</Text>
+          <Text style={styles.cardLabel}>{t('accessDecision.departmentShort')}</Text>
+          <Text style={styles.cardValue}>{t('accessDecision.departmentValue')}</Text>
         </View>
       </View>
     </BlurView>
   </View>
 );
 
-const ConfidenceMeter = ({ value }) => (
+const ConfidenceMeter = ({ value, t }) => (
   <BlurView intensity={10} style={styles.meterCard}>
     <View style={styles.meterHeader}>
-      <Text style={styles.meterLabel}>MATCH CONFIDENCE</Text>
+      <Text style={styles.meterLabel}>{t('accessDecision.matchConfidence')}</Text>
       <Text style={[styles.meterValue, { color: COLORS.neonGreen }]}>{value}%</Text>
     </View>
     <View style={styles.barBg}>
@@ -76,13 +76,14 @@ const ConfidenceMeter = ({ value }) => (
 export default function AccessDecision({ navigation }) {
   const { t } = useTranslation();
   const [audioOn, setAudioOn] = useState(true);
+  const isCompact = width < 390;
 
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={GRADIENTS.primary} style={StyleSheet.absoluteFill} />
 
-      <Header navigation={navigation} />
+      <Header navigation={navigation} t={t} />
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.statusSection}>
@@ -92,35 +93,35 @@ export default function AccessDecision({ navigation }) {
               <Ionicons name="checkmark" size={60} color={COLORS.neonGreen} />
             </View>
           </View>
-          <Text style={styles.statusTitle}>ACCESS GRANTED</Text>
-          <Text style={styles.statusSub}>DOOR-A12 UNLOCKED FOR 5S</Text>
+          <Text style={styles.statusTitle}>{t('accessDecision.statusGranted')}</Text>
+          <Text style={styles.statusSub}>{t('accessDecision.doorUnlockedFor5s')}</Text>
         </View>
 
         <UserHologram t={t} />
         
-        <ConfidenceMeter value={98.7} />
+        <ConfidenceMeter value={98.7} t={t} />
 
-        <View style={styles.detailsGrid}>
+        <View style={[styles.detailsGrid, isCompact && styles.detailsGridCompact]}>
           <BlurView intensity={10} style={styles.detailCard}>
-            <Text style={styles.detailLabel}>DEVICE</Text>
+            <Text style={styles.detailLabel}>{t('accessDecision.deviceLabel')}</Text>
             <Text style={styles.detailValue}>BG-RPI-01</Text>
           </BlurView>
           <BlurView intensity={10} style={styles.detailCard}>
-            <Text style={styles.detailLabel}>TIME</Text>
+            <Text style={styles.detailLabel}>{t('accessDecision.timeLabel')}</Text>
             <Text style={styles.detailValue}>14:23:45</Text>
           </BlurView>
         </View>
 
-        <View style={styles.actionsRow}>
+        <View style={[styles.actionsRow, isCompact && styles.actionsRowCompact]}>
           <TouchableOpacity style={[styles.mainBtn, styles.primaryBtn]}>
-            <Text style={styles.mainBtnText}>VIEW FULL LOG</Text>
+            <Text style={styles.mainBtnText}>{t('accessDecision.viewFullLog')}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.mainBtn, styles.secondaryBtn]}
             onPress={() => setAudioOn(!audioOn)}
           >
             <Ionicons name={audioOn ? "volume-high" : "volume-mute"} size={20} color={COLORS.white} />
-            <Text style={styles.secondaryBtnText}>{audioOn ? "AUDIO ON" : "AUDIO OFF"}</Text>
+            <Text style={styles.secondaryBtnText}>{audioOn ? t('accessDecision.audioEnabled') : t('accessDecision.audioDisabled')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -128,7 +129,7 @@ export default function AccessDecision({ navigation }) {
           style={styles.closeBtn}
           onPress={() => navigation?.navigate('Dashboard')}
         >
-          <Text style={styles.closeBtnText}>RETURN TO DASHBOARD</Text>
+          <Text style={styles.closeBtnText}>{t('accessDecision.returnDashboard')}</Text>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
@@ -148,7 +149,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  headerTitle: { color: COLORS.white, fontSize: 16, fontWeight: '800', letterSpacing: 2 },
+  headerTitle: { color: COLORS.white, fontSize: 15, fontWeight: '800', letterSpacing: 1.5 },
   spacer: { width: 40 },
 
   scroll: { flex: 1, paddingHorizontal: 25 },
@@ -164,11 +165,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(57, 255, 20, 0.05)',
   },
   statusTitle: { 
-    color: COLORS.neonGreen, fontSize: 32, fontWeight: '900', letterSpacing: 2, 
+    color: COLORS.neonGreen, fontSize: 28, fontWeight: '900', letterSpacing: 1.5,
     textShadowColor: COLORS.neonGreen, textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 20,
     marginBottom: 8,
+    textAlign: 'center',
   },
-  statusSub: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  statusSub: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '800', letterSpacing: 1, textAlign: 'center', lineHeight: 18 },
 
   hologramContainer: { marginBottom: 30, alignItems: 'center' },
   hologramBeam: { position: 'absolute', top: -40, width: 2, height: 200, opacity: 0.5 },
@@ -187,13 +189,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 243, 255, 0.05)',
   },
   userInfo: { alignItems: 'center', marginBottom: 20 },
-  userName: { color: COLORS.white, fontSize: 20, fontWeight: '900', letterSpacing: 1 },
-  userRole: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '800', letterSpacing: 1, marginTop: 5 },
+  userName: { color: COLORS.white, fontSize: 20, fontWeight: '900', letterSpacing: 1, textAlign: 'center' },
+  userRole: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '800', letterSpacing: 1, marginTop: 5, textAlign: 'center', lineHeight: 15 },
   cardDivider: { height: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)', marginBottom: 20 },
-  cardGrid: { flexDirection: 'row', justifyContent: 'space-around' },
-  cardCell: { alignItems: 'center' },
+  cardGrid: { flexDirection: 'row', justifyContent: 'space-around', gap: 12 },
+  cardCell: { alignItems: 'center', flex: 1, minWidth: 0 },
   cardLabel: { color: COLORS.textDim, fontSize: 8, fontWeight: '800', letterSpacing: 1, marginBottom: 5 },
-  cardValue: { color: COLORS.white, fontSize: 13, fontWeight: '700' },
+  cardValue: { color: COLORS.white, fontSize: 13, fontWeight: '700', textAlign: 'center' },
 
   meterCard: { borderRadius: 20, padding: 20, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)', marginBottom: 20, overflow: 'hidden' },
   meterHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
@@ -203,17 +205,19 @@ const styles = StyleSheet.create({
   barFill: { height: '100%', borderRadius: 4 },
 
   detailsGrid: { flexDirection: 'row', gap: 15, marginBottom: 30 },
+  detailsGridCompact: { flexDirection: 'column' },
   detailCard: { flex: 1, borderRadius: 15, padding: 15, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)', overflow: 'hidden' },
   detailLabel: { color: COLORS.textDim, fontSize: 8, fontWeight: '800', letterSpacing: 1, marginBottom: 5 },
   detailValue: { color: COLORS.white, fontSize: 14, fontWeight: '700' },
 
   actionsRow: { flexDirection: 'row', gap: 15, marginBottom: 20 },
-  mainBtn: { flex: 1, height: 55, borderRadius: 15, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 10 },
+  actionsRowCompact: { flexDirection: 'column' },
+  mainBtn: { flex: 1, minHeight: 55, borderRadius: 15, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 14 },
   primaryBtn: { backgroundColor: COLORS.white },
-  mainBtnText: { color: COLORS.bg, fontSize: 13, fontWeight: '900', letterSpacing: 1 },
+  mainBtnText: { color: COLORS.bg, fontSize: 13, fontWeight: '900', letterSpacing: 1, textAlign: 'center' },
   secondaryBtn: { borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.2)' },
-  secondaryBtnText: { color: COLORS.white, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  secondaryBtnText: { color: COLORS.white, fontSize: 12, fontWeight: '800', letterSpacing: 1, textAlign: 'center', flexShrink: 1 },
 
   closeBtn: { height: 55, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: COLORS.textDim },
-  closeBtnText: { color: COLORS.textDim, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  closeBtnText: { color: COLORS.textDim, fontSize: 12, fontWeight: '800', letterSpacing: 1, textAlign: 'center' },
 });

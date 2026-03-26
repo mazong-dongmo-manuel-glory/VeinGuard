@@ -6,6 +6,8 @@ export const useMqttStore = create((set, get) => ({
   client: null,
   isConnected: false,
   status: 'OFFLINE',
+  telemetry: null,
+  settingsAck: null,
   clientId: `mobile-${Math.random().toString(16).slice(2, 10)}`,
 
   connect: () => {
@@ -25,17 +27,31 @@ export const useMqttStore = create((set, get) => ({
       client.subscribe(responseTopic('audit/list', get().clientId));
       client.subscribe(responseTopic('access/scan', get().clientId));
       client.subscribe(responseTopic('users/enroll', get().clientId));
+      client.subscribe(responseTopic('settings/update', get().clientId));
       client.subscribe(MQTT_TOPICS.status);
+      client.subscribe(MQTT_TOPICS.telemetry);
     });
 
     client.on('message', (topicName, payload) => {
-      if (topicName !== MQTT_TOPICS.status) return;
-
       try {
         const data = JSON.parse(payload.toString());
-        set({ status: data.status || 'ONLINE' });
+        if (topicName === MQTT_TOPICS.status) {
+          set({ status: data.status || 'ONLINE' });
+          return;
+        }
+
+        if (topicName === MQTT_TOPICS.telemetry) {
+          set({ telemetry: data });
+          return;
+        }
+
+        if (topicName === responseTopic('settings/update', get().clientId)) {
+          set({ settingsAck: data, telemetry: data.telemetry || get().telemetry });
+        }
       } catch {
-        set({ status: 'ONLINE' });
+        if (topicName === MQTT_TOPICS.status) {
+          set({ status: 'ONLINE' });
+        }
       }
     });
 
@@ -120,5 +136,11 @@ export const useMqttStore = create((set, get) => ({
       responseTopic('users/enroll', get().clientId),
       payload
     ),
-}));
 
+  updateSystemSettings: async (payload) =>
+    get().request(
+      MQTT_TOPICS.settingsCmd,
+      responseTopic('settings/update', get().clientId),
+      payload
+    ),
+}));

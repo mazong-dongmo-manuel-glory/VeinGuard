@@ -3,8 +3,8 @@
 Ce dossier contient la passerelle Raspberry Pi du projet :
 
 - acquisition biométrique paume / doigts
-- lecture des capteurs de présence et de contact
-- contrôle du LCD, des LEDs et du buzzer
+- lecture du capteur de lumière
+- contrôle du LCD, du buzzer, de la LED rouge, de la LED verte et des deux LED d'éclairage
 - communication MQTT avec l'application mobile
 - synchronisation Firebase pour les profils et l'historique
 - cache local SQLite pour le mode edge / hors ligne
@@ -21,13 +21,31 @@ Ce dossier contient la passerelle Raspberry Pi du projet :
 ## Capteurs et actionneurs
 
 - caméra Raspberry Pi
-- capteur tactile / contact sur GPIO
-- capteur ultrasonique de proximité
-- capteur PIR de mouvement
+- capteur de lumière sur GPIO
 - LED verte
 - LED rouge
+- LED d'éclairage 1
+- LED d'éclairage 2
 - buzzer
 - écran LCD I2C
+
+## Pilotage mobile
+
+L'application mobile échange uniquement via MQTT et Firebase :
+
+- récupération de la télémétrie sur `bioguard/telemetry`
+- envoi des commandes matérielles sur `bioguard/cmd/settings/update`
+- accusé de réception sur `bioguard/res/settings/update/<client_id>`
+
+Le mobile peut :
+
+- lire l'état du capteur de lumière
+- voir l'état de la caméra, du buzzer, du LCD et des LED
+- activer ou désactiver le mode automatique des LED d'éclairage
+- forcer l'allumage des LED d'éclairage
+- piloter la LED rouge et la LED verte
+- déclencher un test buzzer
+- envoyer un message au LCD
 
 ## Topics MQTT
 

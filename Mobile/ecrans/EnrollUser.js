@@ -57,12 +57,12 @@ export default function EnrollUser({ navigation }) {
 
   const handleCompleteEnrollment = async () => {
     if (!isConnected) {
-      Alert.alert("Système hors ligne", "Impossible de joindre la passerelle Raspberry Pi via MQTT.");
+      Alert.alert(t('enrollment.offlineTitle'), t('enrollment.offlineDesc'));
       return;
     }
 
     if (!consent) {
-      Alert.alert("Consentement requis", "Tu dois accepter le traitement des données biométriques.");
+      Alert.alert(t('enrollment.consentRequiredTitle'), t('enrollment.consentRequiredDesc'));
       return;
     }
 
@@ -80,12 +80,12 @@ export default function EnrollUser({ navigation }) {
       await enrollUser(payload);
       
       Alert.alert(
-        "Enrôlement lancé",
-        "Le Raspberry Pi attend maintenant la paume et le positionnement des doigts. Suis les instructions sur l’écran LCD.",
-        [{ text: "OK", onPress: () => navigation.navigate('UserManagement') }]
+        t('enrollment.enrollmentStartedTitle'),
+        t('enrollment.enrollmentStartedDesc'),
+        [{ text: t('common.ok'), onPress: () => navigation.navigate('UserManagement') }]
       );
     } catch (err) {
-      Alert.alert("Erreur", "Impossible de transmettre la demande d’enrôlement.");
+      Alert.alert(t('common.error'), t('enrollment.enrollmentErrorDesc'));
     }
   };
 
@@ -140,7 +140,7 @@ export default function EnrollUser({ navigation }) {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>{t('enrollment.role').toUpperCase()}</Text>
               <View style={styles.pickerView}>
-                <Text style={styles.pickerText}>OPERATOR</Text>
+                <Text style={styles.pickerText}>{t('enrollment.operatorRole')}</Text>
                 <Ionicons name="chevron-down" size={14} color={COLORS.textDim} />
               </View>
             </View>
@@ -152,10 +152,10 @@ export default function EnrollUser({ navigation }) {
 
           <Text style={styles.inputLabel}>{t('enrollment.accessGroups').toUpperCase()}</Text>
           <View style={styles.checkGrid}>
-            <CheckItem label="Main Entrance" checked={groupMain} onToggle={() => setGroupMain(!groupMain)} />
-            <CheckItem label="Server Room" checked={groupServer} onToggle={() => setGroupServer(!groupServer)} />
-            <CheckItem label="Lab Area" checked={groupLab} onToggle={() => setGroupLab(!groupLab)} />
-            <CheckItem label="Admin Office" checked={groupAdmin} onToggle={() => setGroupAdmin(!groupAdmin)} />
+            <CheckItem label={t('enrollment.mainEntrance')} checked={groupMain} onToggle={() => setGroupMain(!groupMain)} />
+            <CheckItem label={t('enrollment.serverRoom')} checked={groupServer} onToggle={() => setGroupServer(!groupServer)} />
+            <CheckItem label={t('enrollment.labArea')} checked={groupLab} onToggle={() => setGroupLab(!groupLab)} />
+            <CheckItem label={t('enrollment.adminOffice')} checked={groupAdmin} onToggle={() => setGroupAdmin(!groupAdmin)} />
           </View>
         </BlurView>
 
@@ -169,7 +169,7 @@ export default function EnrollUser({ navigation }) {
           <View style={styles.scannerInterface}>
             <LinearGradient colors={['rgba(0, 242, 255, 0.05)', 'transparent']} style={styles.scannerGlow}>
               <Ionicons name="hand-left" size={60} color={COLORS.neonCyan} style={{ opacity: 0.5 }} />
-              <Text style={styles.scannerHint}>ALIGN HAND WITHIN SENSOR RANGE</Text>
+              <Text style={styles.scannerHint}>{t('enrollment.alignHint')}</Text>
             </LinearGradient>
           </View>
 
@@ -180,9 +180,9 @@ export default function EnrollUser({ navigation }) {
           </TouchableOpacity>
 
           <View style={styles.statusGrid}>
-            <StatusIndicator label="Liveness" active={false} />
-            <StatusIndicator label="Quality" active={false} />
-            <StatusIndicator label="Pattern" active={false} />
+            <StatusIndicator label={t('enrollment.liveness')} active={false} />
+            <StatusIndicator label={t('enrollment.qualityStatus')} active={false} />
+            <StatusIndicator label={t('enrollment.pattern')} active={false} />
           </View>
         </BlurView>
 
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
   photoAction: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(0, 242, 255, 0.1)', borderWidth: 1, borderColor: 'rgba(0, 242, 255, 0.2)' },
   photoActionText: { color: COLORS.neonCyan, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
 
-  formRow: { flexDirection: 'row', gap: 15, marginBottom: 15 },
+  formRow: { flexDirection: 'row', gap: 15, marginBottom: 15, flexWrap: 'wrap' },
   inputGroup: { flex: 1, marginBottom: 15 },
   inputLabel: { color: COLORS.textDim, fontSize: 9, fontWeight: '800', letterSpacing: 1, marginBottom: 8 },
   input: {
@@ -276,10 +276,10 @@ const styles = StyleSheet.create({
   },
   pickerText: { color: COLORS.white, fontSize: 14, fontWeight: '600' },
 
-  checkGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  checkRow: { flexDirection: 'row', alignItems: 'center', width: '47%', marginBottom: 5 },
+  checkGrid: { gap: 10 },
+  checkRow: { flexDirection: 'row', alignItems: 'flex-start', width: '100%', marginBottom: 5 },
   checkbox: { width: 18, height: 18, borderRadius: 5, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.2)', marginRight: 10, justifyContent: 'center', alignItems: 'center' },
-  checkText: { color: COLORS.textDim, fontSize: 12, fontWeight: '500' },
+  checkText: { color: COLORS.textDim, fontSize: 12, fontWeight: '500', flex: 1, lineHeight: 18 },
 
   scannerInterface: {
     height: 180,
@@ -291,20 +291,20 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   scannerGlow: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 15 },
-  scannerHint: { color: COLORS.textDim, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  scannerHint: { color: COLORS.textDim, fontSize: 10, fontWeight: '700', letterSpacing: 1, textAlign: 'center', lineHeight: 15, paddingHorizontal: 16 },
 
   primaryAction: { borderRadius: 15, overflow: 'hidden', marginBottom: 20, borderWidth: 1, borderColor: 'rgba(188, 19, 254, 0.3)' },
   primaryActionInner: { paddingVertical: 15, alignItems: 'center' },
   primaryActionText: { color: COLORS.neonPurple, fontWeight: '900', letterSpacing: 2, fontSize: 13 },
 
-  statusGrid: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 10 },
+  statusGrid: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 10, flexWrap: 'wrap', gap: 10 },
   statusItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusLabel: { color: COLORS.textDim, fontSize: 9, fontWeight: '700' },
 
   consentCard: { padding: 20, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255, 216, 78, 0.1)', marginBottom: 30 },
   consentHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 15 },
-  consentTitle: { color: COLORS.neonAmber, fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  consentTitle: { color: COLORS.neonAmber, fontSize: 11, fontWeight: '900', letterSpacing: 1, flex: 1 },
   consentBody: { color: COLORS.textDim, fontSize: 13, lineHeight: 20, marginBottom: 15 },
 
   footer: { gap: 12 },
