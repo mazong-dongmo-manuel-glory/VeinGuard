@@ -1,6 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db, FIREBASE_ENABLED } from './firebase';
+import { db, FIRESTORE_ENABLED } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import {
+  enterFirestoreQuotaCooldown,
+  isFirestoreQuotaError,
+  prepareFirestoreAccess,
+} from './firestoreGuard';
 
 const DEFAULT_PREFERENCES = {
   autoRefreshData: true,
@@ -26,7 +31,7 @@ export async function loadUserPreferences(uid) {
     } catch {}
   }
 
-  if (FIREBASE_ENABLED && db) {
+  if (FIRESTORE_ENABLED && db && await prepareFirestoreAccess()) {
     try {
       const snapshot = await getDoc(doc(db, 'mobile_user_preferences', uid));
       if (snapshot.exists()) {
@@ -34,7 +39,11 @@ export async function loadUserPreferences(uid) {
         await AsyncStorage.setItem(storageKey(uid), JSON.stringify(prefs));
         return prefs;
       }
-    } catch {}
+    } catch (error) {
+      if (isFirestoreQuotaError(error)) {
+        await enterFirestoreQuotaCooldown();
+      }
+    }
   }
 
   return getDefaultPreferences();
@@ -48,10 +57,14 @@ export async function saveUserPreferences(uid, preferences) {
   const payload = { ...DEFAULT_PREFERENCES, ...preferences };
   await AsyncStorage.setItem(storageKey(uid), JSON.stringify(payload));
 
-  if (FIREBASE_ENABLED && db) {
+  if (FIRESTORE_ENABLED && db && await prepareFirestoreAccess()) {
     try {
       await setDoc(doc(db, 'mobile_user_preferences', uid), payload, { merge: true });
-    } catch {}
+    } catch (error) {
+      if (isFirestoreQuotaError(error)) {
+        await enterFirestoreQuotaCooldown();
+      }
+    }
   }
 
   return payload;

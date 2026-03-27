@@ -58,6 +58,7 @@ export const useAuthStore = create((set, get) => ({
           preferences,
         });
       });
+      return;
     }
 
     const fallbackUser = auth.currentUser;
@@ -90,11 +91,9 @@ export const useAuthStore = create((set, get) => ({
       await SecureStore.deleteItemAsync(PASSWORD_KEY);
     }
 
-    const preferences = await loadUserPreferences(credential.user.uid);
     set({
       user: credential.user,
       rememberSession: shouldRemember,
-      preferences,
     });
     return credential.user;
   },
@@ -108,7 +107,22 @@ export const useAuthStore = create((set, get) => ({
     const normalizedPassword = String(password || '');
     const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, normalizedPassword);
     await saveUserPreferences(credential.user.uid, getDefaultPreferences());
-    await get().login({ email: normalizedEmail, password: normalizedPassword, rememberSession });
+
+    if (rememberSession !== false) {
+      await AsyncStorage.setItem(REMEMBER_KEY, '1');
+      await SecureStore.setItemAsync(EMAIL_KEY, normalizedEmail);
+      await SecureStore.setItemAsync(PASSWORD_KEY, normalizedPassword);
+    } else {
+      await AsyncStorage.setItem(REMEMBER_KEY, '0');
+      await SecureStore.deleteItemAsync(EMAIL_KEY);
+      await SecureStore.deleteItemAsync(PASSWORD_KEY);
+    }
+
+    set({
+      user: credential.user,
+      rememberSession: rememberSession !== false,
+      preferences: getDefaultPreferences(),
+    });
     return credential.user;
   },
 

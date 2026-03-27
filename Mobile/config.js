@@ -1,5 +1,13 @@
 export const APP_NAME = 'BioGuard Access';
 
+const readBooleanEnv = (value, defaultValue = false) => {
+  if (value == null || value === '') {
+    return defaultValue;
+  }
+
+  return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
+};
+
 export const MQTT_DEFAULT_HOST = '172.16.9.115';
 export const MQTT_DEFAULT_WS_PORT = '9090';
 export const MQTT_DEFAULT_PORT = '1883';
@@ -38,4 +46,5 @@ export const FIREBASE_CONFIG = {
   measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || 'G-DCZ2V8JV0B',
 };
 
-export const FIREBASE_ENABLED = true;
+export const FIREBASE_ENABLED = readBooleanEnv(process.env.EXPO_PUBLIC_FIREBASE_AUTH_ENABLED, true);
+export const FIRESTORE_ENABLED = readBooleanEnv(process.env.EXPO_PUBLIC_FIRESTORE_ENABLED, false);
