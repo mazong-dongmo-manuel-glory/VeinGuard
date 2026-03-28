@@ -1,0 +1,356 @@
+[
+  {
+    "style": "Heading 1",
+    "text": "Contexte du projet"
+  },
+  {
+    "style": "Normal",
+    "text": "Le projet BioGuard Access s’inscrit dans le cadre de projet académique réalisé durant la fin de notre session accéléré H2026. Il consiste en la conception et le développement d’un prototype IoT de contrôle d’accès biométrique intelligent, combinant à la fois des composantes matérielles et logicielles. Dans un contexte où la sécurité des accès physiques devient de plus en plus importante, notamment dans les environnements résidentiels et professionnels, ce projet propose une solution moderne basée sur l’intégration de technologies embarquées et mobiles. Contrairement aux systèmes traditionnels de contrôle d’accès (cartes, codes PIN, mot de passe), BioGuard Access utilise la biométrie pour garantir une authentification plus sécurisée et personnalisée. Le système repose sur une architecture hybride. Nous avons un Raspberry Pi qui assure la capture biométrique et la prise de décision locale, une application mobile développée avec Expo (React Native) permettant la supervision et l’administration, une communication en temps réel via le protocole MQTT, et une intégration avec Firebase pour l’authentification et la synchronisation des données dans le cloud. "
+  },
+  {
+    "style": "Normal",
+    "text": "Ce projet met également l’accent sur la collaboration entre les membres de l’équipe, chacun étant responsable de modules spécifiques tels que l’intégration matérielle, le backend IoT, ou encore l’expérience utilisateur mobile."
+  },
+  {
+    "style": "Heading 1",
+    "text": "Description du projet"
+  },
+  {
+    "style": "Normal",
+    "text": "Le projet BioGuard Access consiste en la réalisation d’un prototype fonctionnel de système de contrôle d’accès intelligent basé sur l’authentification biométrique. Il vise à offrir une solution sécurisée, fiable et connectée pour la gestion des accès physiques."
+  },
+  {
+    "style": "Normal",
+    "text": "Le système repose sur une architecture distribuée permettant à la fois un traitement local des données biométriques et une gestion centralisée via une application mobile. Le Raspberry Pi joue un rôle central dans la capture et la validation des données biométriques, tandis que l’application mobile permet aux administrateurs de superviser les accès, de gérer les utilisateurs autorisés et de consulter les informations en temps réel."
+  },
+  {
+    "style": "Normal",
+    "text": "L’utilisation du protocole MQTT assure une communication efficace entre les différents composants du système, tandis que Firebase permet la gestion sécurisée des comptes utilisateurs et la synchronisation des données."
+  },
+  {
+    "style": "Normal",
+    "text": "Le système permet : "
+  },
+  {
+    "style": "List Paragraph",
+    "text": "L’enrôlement des utilisateurs;"
+  },
+  {
+    "style": "List Paragraph",
+    "text": "L’identification biométrique"
+  },
+  {
+    "style": "List Paragraph",
+    "text": "La gestion des accès"
+  },
+  {
+    "style": "List Paragraph",
+    "text": "La consultation des historiques"
+  },
+  {
+    "style": "List Paragraph",
+    "text": "La supervision en temps réel."
+  },
+  {
+    "style": "Heading 1",
+    "text": "Problème ciblé"
+  },
+  {
+    "style": "Normal",
+    "text": "Quel problème réel résolvez-vous ?"
+  },
+  {
+    "style": "Normal",
+    "text": "Les petites et moyennes structures — entreprises, laboratoires, écoles — ont besoin d'un contrôle d'accès plus fiable qu'un simple code PIN ou une carte magnétique. Pourtant, les solutions biométriques industrielles restent inaccessibles : coûteuses, complexes à déployer et dépendantes de serveurs centraux."
+  },
+  {
+    "style": "Normal",
+    "text": "Les problèmes concrets sont :"
+  },
+  {
+    "style": "List Bullet",
+    "text": "Le partage ou la divulgation d'un code PIN compromet immédiatement la sécurité."
+  },
+  {
+    "style": "List Bullet",
+    "text": "L'absence de traçabilité empêche tout audit en cas d'incident."
+  },
+  {
+    "style": "List Bullet",
+    "text": "Les solutions professionnelles existantes coûtent plusieurs milliers de dollars et nécessitent un intégrateur spécialisé."
+  },
+  {
+    "style": "List Bullet",
+    "text": "Les systèmes bon marché n'offrent ni supervision distante ni résistance aux pannes réseau."
+  },
+  {
+    "style": "Normal",
+    "text": "VeinGuard résout ce problème avec un système de contrôle d'accès biométrique embarqué, abordable et entièrement supervisable depuis un smartphone — sans dépendre d'un serveur central coûteux. La reconnaissance porte sur la paume et la géométrie des doigts, traitées localement sur un Raspberry Pi via un algorithme PalmCode déterministe et explicable."
+  },
+  {
+    "style": "Heading 1",
+    "text": "Client cible"
+  },
+  {
+    "style": "Normal",
+    "text": "Qui achèterait notre produit : "
+  },
+  {
+    "style": "Heading 1",
+    "text": "Coût de Production Unitaire"
+  },
+  {
+    "style": "Heading 1",
+    "text": "Prix de vente proposé"
+  },
+  {
+    "style": "Normal",
+    "text": "Le prix de vente proposé varie de 499$ à 699$"
+  },
+  {
+    "style": "Normal",
+    "text": "Prix psychologique"
+  },
+  {
+    "style": "Normal",
+    "text": "Le seuil de 249,99 $ positionne VeinGuard bien sous la barre des 250 $, tout en signalant un produit sérieux. Ce prix est cohérent avec un kit IoT académique premium ou un équipement de sécurité d'entrée de gamme professionnel."
+  },
+  {
+    "style": "Normal",
+    "text": "Positionnement marché"
+  },
+  {
+    "style": "Normal",
+    "text": "VeinGuard n'est pas un gadget — c'est un système de contrôle d'accès complet et opérationnel. Il intègre un algorithme biométrique PalmCode propriétaire, une caméra Raspberry Pi, un protocole MQTT temps réel, une persistance SQLite locale résistante aux pannes réseau, une synchronisation Firebase et une application mobile iOS/Android. Ce positionnement \"Sécurité Embarquée Accessible\" justifie pleinement le prix demandé."
+  },
+  {
+    "style": "Normal",
+    "text": "Concurrence"
+  },
+  {
+    "style": "Heading 1",
+    "text": "Marge de Profit"
+  },
+  {
+    "style": "Heading 3",
+    "text": "Communication MQTT (API principale)"
+  },
+  {
+    "style": "Heading 1",
+    "text": "Investissement demandé au Dragon"
+  },
+  {
+    "style": "Normal",
+    "text": "Combien demandez-vous ? Pour quel pourcentage ?"
+  },
+  {
+    "style": "Normal",
+    "text": "25 000 $"
+  },
+  {
+    "style": "Normal",
+    "text": "pour 15 % des parts  —  Valorisation implicite : 166 666 $ CAD"
+  },
+  {
+    "style": "Normal",
+    "text": "À quoi servira l'investissement ?"
+  },
+  {
+    "style": "Heading 1",
+    "text": "Conclusion"
+  },
+  {
+    "style": "Normal",
+    "text": "Le projet BioGuard Access constitue un prototype complet intégrant : matériel embarqué, communication IoT, application mobile, stockage cloud et biométrie. "
+  },
+  {
+    "style": "Normal",
+    "text": "Il permet de démontrer une solution cohérente, fonctionnelle et réaliste de contrôle d’accès intelligent, tout en répondant aux objectifs pédagogiques du projet académique."
+  },
+  {
+    "style": "TABLE_0",
+    "rows": [
+      [
+        "Segement",
+        "Profil",
+        "Besoin principal"
+      ],
+      [
+        "PME et Bureaux",
+        "Entreprises gérant l’accès à des locaux sensibles (salle serveur, archives, réserve)",
+        "Traçabilité, supervison mobile, aucun prestataire externe"
+      ],
+      [
+        "Secteur Éducatif",
+        "Cégeps et écoles enseignant l’IoT, Python, la sécurité embarquée",
+        "Kit pédagogoque tout-en-un (Raspberry Pi, MQTT, biométrie, Firebase)"
+      ],
+      [
+        "Makerspaces",
+        "Espaces partagés gérant l’accès à du matériel de valeur",
+        "Déploiement simple, historique des entrées, app mobile intuitive"
+      ],
+      [
+        "Projets académiques",
+        "Universités et cégeps cherchant un projet IoT de bout en bout démontrable",
+        "Architecture claire, code documenté, biométrie explicable"
+      ]
+    ]
+  },
+  {
+    "style": "TABLE_1",
+    "rows": [
+      [
+        "Composant",
+        "Prototype",
+        "Série estimée"
+      ],
+      [
+        "Raspberry Pi 5 (unité centrale + caméra)",
+        "165.90$",
+        "65$"
+      ],
+      [
+        "Capteur de lumière + LCD I2C 16×2 + Resistore",
+        "9.40$",
+        "8$"
+      ],
+      [
+        "LEDs, résistances, buzzer, câblage, Breadboard",
+        "24.70$",
+        "5$"
+      ],
+      [
+        "Alimentation (bloc 5 V / 5 A)",
+        "16.95$",
+        "8$"
+      ],
+      [
+        "Boîtier (impression 3D → moule injection)",
+        "12.45$",
+        "12$"
+      ],
+      [
+        "TOTAL COÛT UNITAIRE",
+        "229.15$ CAD",
+        "98,00 $ CAD"
+      ]
+    ]
+  },
+  {
+    "style": "TABLE_2",
+    "rows": [
+      [
+        "Produit",
+        "Prix",
+        "Biométrie",
+        "App mobile",
+        "Supervision distante"
+      ],
+      [
+        "VeinGuard",
+        "249,99 $",
+        "Oui (paume)",
+        "Oui",
+        "Oui"
+      ],
+      [
+        "HID iCLASS SE",
+        "~800 $",
+        "Non",
+        "Non",
+        "Partielle"
+      ],
+      [
+        "ZKTeco MB10VL",
+        "~350 $",
+        "Veines main",
+        "Non",
+        "Non"
+      ],
+      [
+        "Raspberry Pi + badge DIY",
+        "~60 $",
+        "Non",
+        "Non",
+        "Non"
+      ]
+    ]
+  },
+  {
+    "style": "TABLE_3",
+    "rows": [
+      [
+        "Indicateur",
+        "Phase prototype",
+        "Production série"
+      ],
+      [
+        "Prix de vente",
+        "249,99 $",
+        "249,99 $"
+      ],
+      [
+        "Coût de production unitaire",
+        "176,00 $",
+        " 98,00 $"
+      ],
+      [
+        "Profit unitaire",
+        " 73,99 $",
+        "151,99 $"
+      ],
+      [
+        "Marge brute",
+        "    30 %",
+        "    61 %"
+      ],
+      [
+        "Projection — 500 unités (série)",
+        "—",
+        "75 995,00 $ CAD"
+      ]
+    ]
+  },
+  {
+    "style": "TABLE_4",
+    "rows": [
+      [
+        "#",
+        "Poste budgétaire",
+        "Montant",
+        "Résultat visé"
+      ],
+      [
+        "1",
+        "Achat en volume — Raspberry Pi 5 (contrats distributeurs)",
+        "10 000 $",
+        "< 65 $ / unité"
+      ],
+      [
+        "2",
+        "Design industriel — boîtier moulé injection + certifications",
+        "8 000 $",
+        "Finition commerciale"
+      ],
+      [
+        "3",
+        "App VeinGuard — notifications push + mode hors-ligne complet",
+        "5 000 $",
+        "iOS & Android v1.0"
+      ],
+      [
+        "4",
+        "Marketing & distribution — 1re série (PME + cégeps)",
+        "2 000 $",
+        "Lancement 1re série"
+      ],
+      [
+        "∑",
+        "TOTAL INVESTISSEMENT",
+        "25 000 $",
+        "15 % des parts"
+      ]
+    ]
+  }
+]

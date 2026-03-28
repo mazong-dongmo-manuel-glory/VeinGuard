@@ -379,16 +379,16 @@ Les limites doivent être assumées clairement.
 
 ## 18. Coût approximatif du prototype
 
-| Composant | Coût estimé |
-|---|---:|
-| Raspberry Pi | 90 $ |
-| Caméra Pi | 30 $ |
-| Capteur de lumière | 3 $ |
-| LCD I2C | 10 $ |
-| LEDs, résistances, buzzer | 8 $ |
-| Boîtier / intégration | 20 $ |
-| Alimentation et câblage | 15 $ |
-| **Total estimé** | **176 $** |
+| Composant                 | Coût estimé |
+| ------------------------- | ----------: |
+| Raspberry Pi              |        90 $ |
+| Caméra Pi                 |        30 $ |
+| Capteur de lumière        |         3 $ |
+| LCD I2C                   |        10 $ |
+| LEDs, résistances, buzzer |         8 $ |
+| Boîtier / intégration     |        20 $ |
+| Alimentation et câblage   |        15 $ |
+| **Total estimé**          |   **176 $** |
 
 ## 19. Positionnement économique simplifié
 
